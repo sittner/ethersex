@@ -26,45 +26,29 @@
 
 #include <stdint.h>
 
+#include "services/cron/cron_shared.h"
 
+#include "config.h"
 
-/** Enumeration of Weekdays */
-typedef enum  {
-	SUN =   1,
-    MON =   2,
-	TUE =   4,
-	WED =   8,
-	THU =  16,
-	FRI =  32,
-	SAT =  64
-} days_of_week_t;
+#if defined(CRON_VFS_SUPPORT) || defined(CRON_EEPROM_SUPPORT)
+#define CRON_PERIST_SUPPORT 1
+#endif
 
 /** This structure represents a cron job */
 struct cron_event {
 	uint8_t extrasize;
-	union{
-		int8_t fields[5];
-		/** meaning of the signed values in the following structure:
-		  *   x in 0..59:    absolute value (minute)
-		  *   x in 0..23:    absolute value (hour)
-		  *   x in 0..30:    absolute value (day)
-		  *   x in 0..12:    absolute value (month)
-		  *   x in SUN..SAT: absolute value (dow) // day of the week
-		  *   				 persistent 1 = save, 0 = don't save
-		  *   x is    -1:    wildcard
-		  *   x in -59..-2:  Example -2 for hour: when hour % 2 == 0 <=> every 2 hours */
-		struct {
-			int8_t minute;
-			int8_t hour;
-			int8_t day;
-			int8_t month;
-			days_of_week_t dayofweek : 7;
-			int8_t persistent : 1;
-		};
-	};
+	cron_conditions_t cond;
 	uint8_t repeat;
 	/** Either CRON_JUMP or CRON_ECMD */
-	uint8_t cmd;
+	unsigned cmd : 4;
+	unsigned use_utc : 1;
+#ifdef CRON_PERIST_SUPPORT
+	unsigned persistent : 1;
+#endif
+#ifdef CRON_ANACRON_SUPPORT
+	unsigned anacron : 1;
+	unsigned anacron_pending : 1;
+#endif
 	union {
 		/** for CRON_JUMP
 		* All additional bytes are extra user data for applications. E.g.
@@ -95,15 +79,12 @@ struct cron_event_linkedlist
 
 extern struct cron_event_linkedlist* head;
 extern struct cron_event_linkedlist* tail;
-extern uint8_t cron_use_utc;
 
-#define USE_UTC 1
-#define USE_LOCAL 0
 #define INFINIT_RUNNING 0
 #define CRON_APPEND -1
 
-#define CRON_JUMP 10
-#define CRON_ECMD 20
+#define CRON_JUMP 1
+#define CRON_ECMD 2
 
 
 /** Insert cron job (that invokes a callback function) to the linked list.
@@ -116,8 +97,8 @@ extern uint8_t cron_use_utc;
   * @extrasize, @extradata: extra data that is passed to the callback function
   */
 
-void cron_jobinsert_callback(
-	int8_t minute, int8_t hour, int8_t day, int8_t month, days_of_week_t dayofweek,
+int16_t cron_jobinsert_callback(
+	int8_t minute, int8_t hour, int8_t day, int8_t month, int8_t daysofweek,
 	uint8_t repeat,	int8_t position, void (*handler)(void*), uint8_t extrasize, void* extradata
 );
 
@@ -129,26 +110,21 @@ void cron_jobinsert_callback(
 * @position: -1 to append else the new job is inserted at that position
 * @cmddata: ecmd string (cron will not free memory but just copy from pointerposition! Has to be null terminated.)
 */
-void cron_jobinsert_ecmd(
-	int8_t minute, int8_t hour, int8_t day, int8_t month, days_of_week_t dayofweek,
+int16_t cron_jobinsert_ecmd(
+	int8_t minute, int8_t hour, int8_t day, int8_t month, int8_t daysofweek,
 	uint8_t repeat, int8_t position, char* ecmd
 );
 
-#ifdef CRON_VFS_SUPPORT
+#ifdef CRON_PERIST_SUPPORT
 /** Saves all as persistent marked Jobs to vfs */
-int8_t cron_save();
-
-/** Mark a Jobs as persistent
-* @jobnumber: number of job to mark
-*/
-uint8_t cron_make_persistent(uint8_t jobnumber);
+int16_t cron_save();
 #endif
 
 /** Insert cron job to the linked list.
 * @newone: The new cron job structure (malloc'ed memory!)
 * @position: Where to insert the new job
 */
-void cron_insert(struct cron_event_linkedlist* newone, int8_t position);
+uint8_t cron_insert(struct cron_event_linkedlist* newone, int8_t position);
 
 /** remove the job from the linked list */
 void cron_jobrm(struct cron_event_linkedlist* job);
@@ -161,6 +137,11 @@ struct cron_event_linkedlist* cron_getjob(uint8_t jobposition);
 
 /** init cron. (Set head to NULL for example) */
 void cron_init(void);
+
+/** execute cron job
+* @exec: Item to execute
+*/
+void cron_execute(struct cron_event_linkedlist* exec);
 
 /** periodically check, if an event matches the current time. must be called
   * once per minute */

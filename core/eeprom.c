@@ -69,7 +69,7 @@ eeprom_get_chksum (void)
   uint8_t eeprom_crc = 0;
   uint8_t *p = (uint8_t *) EEPROM_CONFIG_BASE;
 
-  for (uint8_t i = 0; i < (sizeof (struct eeprom_config_t) - 1); i++)
+  for (uint16_t i = 0; i < (sizeof (struct eeprom_config_t) - 1); i++)
     {
       eeprom_crc = _crc_ibutton_update (eeprom_crc, eeprom_read_byte (p));
       p++;
@@ -153,6 +153,11 @@ eeprom_init (void)
 
 #ifdef MOTD_SUPPORT
   eeprom_save_P (motd_text, PSTR (CONF_MOTD_DEFAULT), MOTD_VALUESIZE);
+#endif
+
+#ifdef CRON_EEPROM_SUPPORT
+  uint8_t count = 0;
+  eeprom_save_offset(crontab, 0, &count, sizeof(count));
 #endif
   eeprom_update_chksum ();
 }

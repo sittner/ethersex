@@ -11,5 +11,5 @@ divert(globals_divert)
 
 divert(old_divert)')')
 
-define(`KTY_GET', `KTY_USED()temperatur(get_kty($1))')
+define(`KTY_GET', `KTY_USED()kty_get($1)')
 

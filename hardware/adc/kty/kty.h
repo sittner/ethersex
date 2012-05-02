@@ -26,13 +26,11 @@
 #ifndef ADC_KTY81_H
 #define ADC_KTY81_H
 
-#define get_kty(x) adc_get(x)
-
 int8_t
-kty_calibrate(uint16_t sensorwert);
+kty_calibrate(uint8_t channel);
 
 int16_t
-temperatur(uint16_t sensorwert);
+kty_get(uint8_t channel);
 
 void 
 temp2text(char *textbuf, int16_t temperatur);

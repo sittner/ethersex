@@ -180,6 +180,24 @@ eeprom_init (void)
   };
   eeprom_save (tanklevel_params, &tanklevel_temp, sizeof(tanklevel_params_t));
 #endif
+
+#ifdef HEATCTL_SUPPORT
+  heatctl_eeprom_t heatctl_temp;
+  memset(&heatctl_temp, 0, sizeof(heatctl_eeprom_t));
+  /* initialize parameters */
+  heatctl_temp.mode = HEATCTL_MODE_MANU;
+  heatctl_temp.params.manu_temp_hotwater = HEATCTL_MANU_TEMP_HOTWATER;
+  heatctl_temp.params.manu_temp_radiator = HEATCTL_MANU_TEMP_RADIATOR;
+  heatctl_temp.params.hyst_boiler = HEATCTL_HYST_BOILER;
+  heatctl_temp.params.hyst_hotwater = HEATCTL_HYST_HOTWATER;
+  heatctl_temp.params.hyst_radiator = HEATCTL_HYST_RADIATOR;
+  heatctl_temp.params.min_diff_hotwater = HEATCTL_MIN_DIFF_HOTWATER;
+  heatctl_temp.params.radiator_offset = HEATCTL_RADIATOR_OFFSET;
+#ifdef HEATCTL_CIRCPUMP_SUPPORT
+  heatctl_temp.params.circpump_time = HEATCTL_CIRCPUMP_TIME;
+#endif
+  eeprom_save (heatctl_eeprom, &heatctl_temp, sizeof(heatctl_eeprom_t));
+#endif
   eeprom_update_chksum ();
 }
 

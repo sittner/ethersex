@@ -43,6 +43,10 @@
 #include "services/tanklevel/tanklevel.h"
 #endif
 
+#ifdef HEATCTL_SNMP_SUPPORT
+#include "services/heatctl/heatctl.h"
+#endif
+
 #ifdef SNMP_SUPPORT
 
 /**********************************************************
@@ -276,6 +280,73 @@ tank_next(uint8_t * ptr, struct snmp_varbinding * bind)
 }
 #endif
 
+#ifdef HEATCTL_SNMP_SUPPORT
+uint8_t
+heatctl_reaction(uint8_t * ptr, struct snmp_varbinding * bind, void *userdata)
+{
+  if (bind->len != 1)
+  {
+    return 0;
+  }
+
+  switch (bind->data[0])
+  {
+    case 0:
+      return encode_int(ptr, heatctl_eeprom.mode);
+    case 1:
+      return encode_int(ptr, heatctl_boiler_temp);
+    case 2:
+      return encode_int(ptr, heatctl_boiler_setpoint);
+    case 3:
+      return encode_int(ptr, heatctl_burner_on);
+    case 4:
+      return encode_int(ptr, heatctl_outdoor_temp);
+    case 5:
+      return encode_int(ptr, heatctl_radiator_index);
+    case 6:
+      return encode_int(ptr, heatctl_radiator_setpoint);
+    case 7:
+      return encode_int(ptr, heatctl_radiator_on);
+    case 8:
+      return encode_int(ptr, heatctl_hotwater_temp);
+    case 9:
+      return encode_int(ptr, heatctl_hotwater_index);
+    case 10:
+      return encode_int(ptr, heatctl_hotwater_req);
+    case 11:
+      return encode_int(ptr, heatctl_hotwater_setpoint);
+    case 12:
+      return encode_int(ptr, heatctl_hotwater_on);
+    case 13:
+      return encode_timeticks(ptr, clock_get_uptime() * 100L);
+    case 14:
+      return encode_timeticks(ptr, heatctl_radiator_on_time * 100L);
+    case 15:
+      return encode_timeticks(ptr, heatctl_hotwater_on_time * 100L);
+    case 16:
+      return encode_timeticks(ptr, heatctl_burner_on_time * 100L);
+#ifdef HEATCTL_CIRCPUMP_SUPPORT
+    case 17:
+      return encode_int(ptr, heatctl_circpump_on);
+    case 18:
+      return encode_timeticks(ptr, heatctl_circpump_on_time * 100L);
+#endif
+    default:
+      return 0;
+  }
+}
+
+uint8_t
+heatctl_next(uint8_t * ptr, struct snmp_varbinding * bind)
+{
+#ifdef HEATCTL_CIRCPUMP_SUPPORT
+  return onelevel_next(ptr, bind, 19);
+#else
+  return onelevel_next(ptr, bind, 17);
+#endif
+}
+#endif
+
 uint8_t
 string_pgm_reaction(uint8_t * ptr, struct snmp_varbinding * bind,
                     void *userdata)
@@ -331,6 +402,10 @@ const char ow_present_reaction_obj_name[] PROGMEM = SNMP_OID_ETHERSEX "\x03\x04"
 const char tank_reaction_obj_name[] PROGMEM = SNMP_OID_ETHERSEX "\x04";
 #endif
 
+#ifdef HEATCTL_SUPPORT
+const char heatctl_reaction_obj_name[] PROGMEM = SNMP_OID_ETHERSEX "\x05";
+#endif
+
 const struct snmp_reaction snmp_reactions[] PROGMEM = {
   {desc_obj_name, string_pgm_reaction, (void *) desc_value, NULL},
 #if defined(WHM_SUPPORT) || defined(UPTIME_SUPPORT)
@@ -356,6 +431,9 @@ const struct snmp_reaction snmp_reactions[] PROGMEM = {
 #endif
 #ifdef TANKLEVEL_SUPPORT
   {tank_reaction_obj_name, tank_reaction, NULL, tank_next},
+#endif
+#ifdef HEATCTL_SUPPORT
+  {heatctl_reaction_obj_name, heatctl_reaction, NULL, heatctl_next},
 #endif
   {NULL, NULL, NULL, NULL}
 };

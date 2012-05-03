@@ -300,6 +300,16 @@ template $TANKLEVEL_LOCK_SUPPORT << FNORD
   pin(TANKLEVEL_LOCK, PA2, INPUT)
 FNORD
 
+template $HEATCTL_SUPPORT << FNORD
+  /* heating control outputs */
+  pin(HEATCTL_RADIATOR, PC5, OUTPUT)
+  pin(HEATCTL_HOTWATER, PC6, OUTPUT)
+  pin(HEATCTL_BURNER, PC2, OUTPUT)
+FNORD
+template $HEATCTL_CIRCPUMP << FNORD
+  pin(HEATCTL_CIRCPUMP, PC7, OUTPUT)
+FNORD
+
 ### HARDWARE SPECIFIC TEMPLATES #############################################
 
 HWCLASS=`echo $MCU | sed  's/.*\(.\)/\1/'`

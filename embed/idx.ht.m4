@@ -49,5 +49,6 @@ ifdef(`conf_LCD_INLINE', `<p>Handle <a href="lcd.ht">LCD and other displays</a><
 ifdef(`conf_CW_INLINE', `<p>Send <a href="cw.ht">Morse code</a></p>')
 ifdef(`conf_DMX_STORAGE_INLINE', `<p>Control <a href="dmx.ht">DMX Channels</a></p>')
 ifdef(`conf_TANKLEVEL_INLINE', `<p>To query the tank level see <a href="tnk.ht">here</a>.</p>')
+ifdef(`conf_HEATCTL_INLINE', `<p>To see the heating control state click <a href="hct.ht">here</a>.</p>')
  </body>
 </html>

@@ -1,0 +1,35 @@
+dep_bool_menu "Heating Control" HEATCTL_SUPPORT $UPTIME_SUPPORT $ONEWIRE_NAMING_SUPPORT $ONEWIRE_NAMING_SUPPORT
+	int "Boiler onewire index" HEATCTL_OW_IDX_BOILER 0
+	int "Hot water onewire index" HEATCTL_OW_IDX_HOTWATER 1
+	int "Outdoor onewire index" HEATCTL_OW_IDX_OUTDOOR 2
+	int "Radiator preset table item count" HEATCTL_RADIATOR_ITEM_COUNT 8
+	int "Hot Water preset table item count" HEATCTL_HOTWATER_ITEM_COUNT 8
+	int "Boiler max temperature" HEATCTL_BOILER_MAX_TEMP 780
+	int "Startup delay (wait for sensors)" HEATCTL_STARTUP_DELAY 10
+	dep_bool "Priorize hot water" HEATCTL_HOTWATER_PRIO $HEATCTL_SUPPORT
+	dep_bool "Radiator pump output is active low" HEATCTL_RADIATOR_ACTIVE_LOW $HEATCTL_SUPPORT
+	dep_bool "Hot water pump output is active low" HEATCTL_HOTWATER_ACTIVE_LOW $HEATCTL_SUPPORT
+	dep_bool "Burner output is active low" HEATCTL_BURNER_ACTIVE_LOW $HEATCTL_SUPPORT
+	int "Burner min on time (sec)" HEATCTL_BURNER_MIN_ON_TIME 30
+	int "Burner min off time (sec)" HEATCTL_BURNER_MIN_OFF_TIME 60
+	int "Default hot water temp (manual mode)" HEATCTL_MANU_TEMP_HOTWATER 500
+	int "Default radiator temp (manual mode)" HEATCTL_MANU_TEMP_RADIATOR 200
+	int "Default boiler hysteresis" HEATCTL_HYST_BOILER 25
+	int "Default hot water hysteresis" HEATCTL_HYST_HOTWATER 25
+	int "Default radiator hysteresis" HEATCTL_HYST_RADIATOR 10
+	int "Default radiator temp offset" HEATCTL_RADIATOR_OFFSET 100
+	int "Default minimum hotwater difference" HEATCTL_MIN_DIFF_HOTWATER 0
+	dep_bool "Circulation pump support" HEATCTL_CIRCPUMP_SUPPORT $HEATCTL_SUPPORT
+	if  [ "$HEATCTL_CIRCPUMP_SUPPORT" = "y" ] ; then
+		dep_bool "Circulation pump output is active low" HEATCTL_CIRCPUMP_ACTIVE_LOW $HEATCTL_CIRCPUMP_SUPPORT
+		dep_bool "Hot water request starts circulation pump" HEATCTL_HOTWATER_REQ_CIRCPUMP $HEATCTL_CIRCPUMP_SUPPORT
+		int "Default circulation pump time" HEATCTL_CIRCPUMP_TIME 300
+	fi
+	dep_bool "SNMP support" HEATCTL_SNMP_SUPPORT $HEATCTL_SUPPORT
+	dep_bool "Inline heater control status" HEATCTL_INLINE_SUPPORT $HEATCTL_SUPPORT $VFS_INLINE_SUPPORT
+	if  [ "$HEATCTL_INLINE_SUPPORT" = "y" ] ; then
+		int "Request hot water Button item index" HEATCTL_HOTWATER_REQ_INDEX 1
+	fi
+endmenu
+
+

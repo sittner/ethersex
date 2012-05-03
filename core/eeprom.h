@@ -69,6 +69,10 @@
 #include "services/tanklevel/tanklevel.h"
 #endif
 
+#ifdef HEATCTL_SUPPORT
+#include "services/heatctl/heatctl.h"
+#endif
+
 struct eeprom_config_t
 {
 #ifdef ETHERNET_SUPPORT
@@ -142,6 +146,10 @@ struct eeprom_config_t
 
 #ifdef TANKLEVEL_SUPPORT
   tanklevel_params_t tanklevel_params;
+#endif
+
+#ifdef HEATCTL_SUPPORT
+  heatctl_eeprom_t heatctl_eeprom;
 #endif
   uint8_t crc;
 };

@@ -57,6 +57,10 @@
 #include "hardware/adc/adc.h"
 #endif
 
+#ifdef KTY_CALIBRATION_SUPPORT
+#include "hardware/adc/kty/kty.h"
+#endif
+
 #ifdef ONEWIRE_NAMING_SUPPORT
 #include "hardware/onewire/onewire.h"
 #endif
@@ -102,8 +106,8 @@ struct eeprom_config_t
   uint16_t adc_vref;
 #endif
 
-#ifdef KTY_SUPPORT
-  int8_t kty_calibration;
+#ifdef KTY_CALIBRATION_SUPPORT
+  int8_t kty_calibration[KTY_CHANNEL_COUNT];
 #endif
 
 #ifdef STELLA_SUPPORT

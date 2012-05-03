@@ -29,6 +29,8 @@
 
 #include "config.h"
 
+#define ADC_RES (1 << 10)
+
 #ifdef ADC_VOLTAGE_SUPPORT
 
 #if ADC_REF == ADC_2_56
@@ -38,8 +40,6 @@
 #else
 #define ADC_REF_VOLTAGE 5000
 #endif
-
-#define ADC_RES_RECIEP (1.0F / 1023.0F)
 
 #define adc_get_voltage(x) adc_get_voltage_setref(ADC_REF,x)
 

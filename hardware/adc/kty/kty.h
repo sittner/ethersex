@@ -15,6 +15,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
  */
 
+#ifndef ADC_KTY_H
+#define ADC_KTY_H
+
 #include <avr/io.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -22,17 +25,14 @@
 #include <avr/pgmspace.h>
 
 #include "hardware/adc/adc.h"
+#include "hardware/adc/kty/kty_channels.h"
 
-#ifndef ADC_KTY81_H
-#define ADC_KTY81_H
+#ifdef KTY_CALIBRATION_SUPPORT
+extern int8_t kty_calibrate(uint8_t channel);
+#endif
 
-int8_t
-kty_calibrate(uint8_t channel);
+extern int16_t kty_get(uint8_t channel);
 
-int16_t
-kty_get(uint8_t channel);
-
-void 
-temp2text(char *textbuf, int16_t temperatur);
+extern void temp2text(char *textbuf, int16_t temperatur);
 
 #endif /* ADC_KTY81_H */

@@ -86,7 +86,10 @@ adc_get_voltage_setref(uint8_t ref, uint8_t channel)
 uint16_t
 adc_raw_to_voltage(uint16_t raw)
 {
-  return ((float) vref * (float) raw * ADC_RES_RECIEP);
+  uint32_t volt = raw;
+  volt *= vref;
+  volt /= (ADC_RES - 1);
+  return volt;
 }
 
 uint16_t

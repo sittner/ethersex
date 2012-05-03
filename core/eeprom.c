@@ -119,8 +119,9 @@ eeprom_init (void)
   eeprom_save_int (adc_vref, ADC_REF_VOLTAGE);
 #endif
 
-#ifdef KTY_SUPPORT
-  eeprom_save_char (kty_calibration, 0);
+#ifdef KTY_CALIBRATION_SUPPORT
+  int8_t kty_temp[KTY_CHANNEL_COUNT] = { 0 };
+  eeprom_save (kty_calibration, kty_temp, KTY_CHANNEL_COUNT);
 #endif
 
 #ifdef STELLA_EEPROM

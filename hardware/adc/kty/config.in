@@ -1,2 +1,14 @@
-  dep_bool  "KTY Calculation Support" KTY_SUPPORT $ADC_SUPPORT $ARCH_AVR
+dep_bool_menu "KTY Calculation Support" KTY_SUPPORT $ADC_SUPPORT $ARCH_AVR
+	choice 'Reference source'					\
+		"Vref=Vcc/2		KTY_REF_VREF_HALF_VCC		\
+		Vref=Vcc		KTY_REF_VREF_EQ_VCC		\
+		Vcc_measurement		KTY_REF_VCC_MEASURE_SUPPORT"	\
+		'Vref=Vcc/2' KTY_REF_SOURCE
+	if [ "$KTY_VCC_MEASURE_SUPPORT" = "y" ]; then
+		int "Vcc measurement: VCC to ADC input Resistor" KTY_VCC_RES_VCC 3300
+		int "Vcc measurement: GND to ADC input Resistor" KTY_VCC_RES_GND 2200
+		int "Vcc measurement: ADC input channel" KTY_VCC_ADC_CHANNEL 5
+	fi
+	dep_bool  "Calibration support" KTY_CALIBRATION_SUPPORT $KTY_SUPPORT
+endmenu
 

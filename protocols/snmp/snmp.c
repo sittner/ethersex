@@ -292,31 +292,31 @@ heatctl_reaction(uint8_t * ptr, struct snmp_varbinding * bind, void *userdata)
   switch (bind->data[0])
   {
     case 0:
-      return encode_int(ptr, heatctl_eeprom.mode);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_eeprom.mode);
     case 1:
-      return encode_int(ptr, heatctl_boiler_temp);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_boiler_temp);
     case 2:
-      return encode_int(ptr, heatctl_boiler_setpoint);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_boiler_setpoint);
     case 3:
-      return encode_int(ptr, heatctl_burner_on);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_burner_on);
     case 4:
-      return encode_int(ptr, heatctl_outdoor_temp);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_outdoor_temp);
     case 5:
-      return encode_int(ptr, heatctl_radiator_index);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_radiator_index);
     case 6:
-      return encode_int(ptr, heatctl_radiator_setpoint);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_radiator_setpoint);
     case 7:
-      return encode_int(ptr, heatctl_radiator_on);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_radiator_on);
     case 8:
-      return encode_int(ptr, heatctl_hotwater_temp);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_hotwater_temp);
     case 9:
-      return encode_int(ptr, heatctl_hotwater_index);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_hotwater_index);
     case 10:
-      return encode_int(ptr, heatctl_hotwater_req);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_hotwater_req);
     case 11:
-      return encode_int(ptr, heatctl_hotwater_setpoint);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_hotwater_setpoint);
     case 12:
-      return encode_int(ptr, heatctl_hotwater_on);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_hotwater_on);
     case 13:
       return encode_timeticks(ptr, clock_get_uptime() * 100L);
     case 14:
@@ -327,7 +327,7 @@ heatctl_reaction(uint8_t * ptr, struct snmp_varbinding * bind, void *userdata)
       return encode_timeticks(ptr, heatctl_burner_on_time * 100L);
 #ifdef HEATCTL_CIRCPUMP_SUPPORT
     case 17:
-      return encode_int(ptr, heatctl_circpump_on);
+      return encode_short(ptr, SNMP_TYPE_INTEGER, heatctl_circpump_on);
     case 18:
       return encode_timeticks(ptr, heatctl_circpump_on_time * 100L);
 #endif

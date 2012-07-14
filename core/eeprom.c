@@ -192,6 +192,7 @@ eeprom_init (void)
   heatctl_temp.params.hyst_hotwater = HEATCTL_HYST_HOTWATER;
   heatctl_temp.params.hyst_radiator = HEATCTL_HYST_RADIATOR;
   heatctl_temp.params.min_diff_hotwater = HEATCTL_MIN_DIFF_HOTWATER;
+  heatctl_temp.params.hotwater_offset = HEATCTL_HOTWATER_OFFSET;
   heatctl_temp.params.radiator_offset = HEATCTL_RADIATOR_OFFSET;
 #ifdef HEATCTL_CIRCPUMP_SUPPORT
   heatctl_temp.params.circpump_time = HEATCTL_CIRCPUMP_TIME;

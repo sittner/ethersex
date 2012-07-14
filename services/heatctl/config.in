@@ -17,6 +17,7 @@ dep_bool_menu "Heating Control" HEATCTL_SUPPORT $UPTIME_SUPPORT $ONEWIRE_NAMING_
 	int "Default boiler hysteresis" HEATCTL_HYST_BOILER 25
 	int "Default hot water hysteresis" HEATCTL_HYST_HOTWATER 25
 	int "Default radiator hysteresis" HEATCTL_HYST_RADIATOR 10
+	int "Default hot water temp offset" HEATCTL_HOTWATER_OFFSET -1
 	int "Default radiator temp offset" HEATCTL_RADIATOR_OFFSET 100
 	int "Default minimum hotwater difference" HEATCTL_MIN_DIFF_HOTWATER 0
 	dep_bool "Circulation pump support" HEATCTL_CIRCPUMP_SUPPORT $HEATCTL_SUPPORT

@@ -40,6 +40,7 @@ typedef struct
   int16_t hyst_hotwater;
   int16_t hyst_radiator;
   int16_t min_diff_hotwater;
+  int16_t hotwater_offset;
   int16_t radiator_offset;
 #ifdef HEATCTL_CIRCPUMP_SUPPORT
   uint16_t circpump_time;

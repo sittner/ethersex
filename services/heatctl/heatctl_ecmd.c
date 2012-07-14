@@ -89,10 +89,14 @@ parse_cmd_heatctl_param_show(char *cmd, char *output, uint16_t len)
                                    heatctl_eeprom.params.min_diff_hotwater));
     case 6:
       return ECMD_AGAIN(snprintf_P(output, len,
+                                   PSTR("hotwater_offset: %d"),
+                                   heatctl_eeprom.params.hotwater_offset));
+    case 7:
+      return ECMD_AGAIN(snprintf_P(output, len,
                                    PSTR("radiator_offset: %d"),
                                    heatctl_eeprom.params.radiator_offset));
 #ifdef HEATCTL_CIRCPUMP_SUPPORT
-    case 7:
+    case 8:
       return ECMD_AGAIN(snprintf_P(output, len,
                                    PSTR("circpump_time: %d"),
                                    heatctl_eeprom.params.circpump_time));
@@ -170,6 +174,15 @@ parse_cmd_heatctl_param_set(char *cmd, char *output, uint16_t len)
       return ECMD_ERR_PARSE_ERROR;
     }
     heatctl_eeprom.params.min_diff_hotwater = val;
+  }
+  else if (strcmp_P(cmd, PSTR("hotwater_offset")) == 0)
+  {
+    int16_t val = atoi(valstr);
+    if (val < -1 || val > HEATCTL_BOILER_MAX_TEMP)
+    {
+      return ECMD_ERR_PARSE_ERROR;
+    }
+    heatctl_eeprom.params.hotwater_offset = val;
   }
   else if (strcmp_P(cmd, PSTR("radiator_offset")) == 0)
   {

@@ -251,8 +251,16 @@ heatctl_periodic(void)
   // handle boiler
   if (heatctl_hotwater_on)
   {
-    heatctl_boiler_setpoint =
-      HEATCTL_BOILER_MAX_TEMP - heatctl_eeprom.params.hyst_boiler;
+    if (heatctl_eeprom.params.hotwater_offset >= 0)
+    {
+      heatctl_boiler_setpoint =
+        heatctl_hotwater_setpoint + heatctl_eeprom.params.hotwater_offset;
+    }
+    else
+    {
+      heatctl_boiler_setpoint =
+        HEATCTL_BOILER_MAX_TEMP - heatctl_eeprom.params.hyst_boiler;
+    }
   }
   else
   {

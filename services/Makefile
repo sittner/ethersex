@@ -6,6 +6,7 @@ SUBSUBDIRS += services/dmx-fxslot
 SUBSUBDIRS += services/echo
 SUBSUBDIRS += services/freqcount
 SUBSUBDIRS += services/pam
+SUBSUBDIRS += services/heatctl
 SUBSUBDIRS += services/httpd
 SUBSUBDIRS += services/jabber
 SUBSUBDIRS += services/ntp

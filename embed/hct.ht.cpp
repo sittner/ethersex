@@ -85,7 +85,7 @@ function ecmd_heatctl_state_req_handler(request) {
 			continue;
 		}
 		if (degParams.indexOf(param) >= 0)
-			value = (parseFloat(value) / 10).toFixed(1) + " &deg;C";
+			value = (parseFloat(value) / 100).toFixed(1) + " &deg;C";
 		if (stateParams.indexOf(param) >= 0)
 			value = parseInt(value) ? "ON" : "OFF";
 		if (reqParams.indexOf(param) >= 0)

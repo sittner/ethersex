@@ -1,4 +1,4 @@
-dep_bool_menu "Heating Control" HEATCTL_SUPPORT $UPTIME_SUPPORT $ONEWIRE_NAMING_SUPPORT $ONEWIRE_NAMING_SUPPORT
+dep_bool_menu "Heating Control" HEATCTL_SUPPORT $UPTIME_SUPPORT $ONEWIRE_SUPPORT $ONEWIRE_NAMING_SUPPORT
 	int "Boiler onewire index" HEATCTL_OW_IDX_BOILER 0
 	int "Hot water onewire index" HEATCTL_OW_IDX_HOTWATER 1
 	int "Outdoor onewire index" HEATCTL_OW_IDX_OUTDOOR 2

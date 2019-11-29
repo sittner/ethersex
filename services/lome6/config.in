@@ -1,11 +1,11 @@
-dep_bool_menu "lome6 Service (EXPERIMENTAL)" LOME6_SUPPORT $TCP_SUPPORT $ECMD_PARSER_SUPPORT $WHM_SUPPORT
+dep_bool_menu "lome6 Service" LOME6_SUPPORT $TCP_SUPPORT $ECMD_PARSER_SUPPORT $WHM_SUPPORT
 	dep_bool "LCD Support (TTY needed)" LOME6_LCD_SUPPORT $LOME6_SUPPORT $TTY_SUPPORT
 	if [ "$LOME6_LCD_SUPPORT" = "y" ]; then
 		int "LCD width (chars)" CONF_LOME6_LCD_WIDTH 16
 		int "LCD height (chars)" CONF_LOME6_LCD_HEIGHT 2
 	fi
 
-	dep_bool_menu "OneWire Temperature Support" LOME6_ONEWIRE_SUPPORT $ONEWIRE_SUPPORT $LOME6_SUPPORT
+	dep_bool_menu "OneWire Temperature Support" LOME6_ONEWIRE_SUPPORT $ONEWIRE_SUPPORT $ONEWIRE_DS18XX_SUPPORT $LOME6_SUPPORT
 		comment "OneWire DS18x20 Temperature Sensor IDs:"
 		string "Sensor Power Supply" CONF_SENSOR_PSU "1015ccf501080065"
 		string "Sensor Air Intake" CONF_SENSOR_AIR "10567cf501080006"

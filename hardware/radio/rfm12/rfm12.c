@@ -42,7 +42,7 @@
 #define RFM12_PIN(c)  _RFM12_PIN(c)
 
 
-rfm12_modul_t rfm12_moduls[RFM12_MODUL_COUNT] = {
+rfm12_modul_t rfm12_moduls[RFM12_MODULE_COUNT] = {
 #ifdef RFM12_IP_SUPPORT
   {&RFM12_PORT(RFM12_IP_USE_RFM12),
    _BV(RFM12_PIN(RFM12_IP_USE_RFM12)),
@@ -119,6 +119,7 @@ rfm12_setfreq(uint16_t freq)
   return rfm12_trans(RFM12_CMD_FREQUENCY | freq);
 }
 
+#ifdef RFM12_IP_SUPPORT
 uint16_t
 rfm12_setbaud(uint16_t baud)
 {
@@ -143,6 +144,7 @@ rfm12_setpower(uint8_t power, uint8_t mod)
                              (uint8_t) ((mod & 15) << 4));
   return rfm12_trans(RFM12_CMD_TXCONF | param);
 }
+#endif /* RFM12_IP_SUPPORT */
 #endif /* !TEENSY_SUPPORT */
 
 uint16_t

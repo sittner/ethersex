@@ -51,17 +51,6 @@ FNORD
 
 template() { if test "x$1" = "xy"; then echo ""; sed -e 's/^\s*//'; fi; }
 
-template $MODBUS_SUPPORT << FNORD
-  /* modbus tx  */
-  pin(MODBUS_TX, PC2)
-FNORD
-
-template $DMX_SUPPORT << FNORD
-  /* port config for dmx */
-  pin(DMX_RS485EN, PC2, OUTPUT)
-  pin(DMX_RS485TX, PD1, OUTPUT)
-FNORD
-
 template $BULBDIAL_SUPPORT << FNORD
   /* port config for bulbdial clock */
   pin(BULBDIAL_HOURS,   PD7, OUTPUT)
@@ -92,13 +81,26 @@ template $PWM_SERVO_SUPPORT << FNORD
   pin(SERVO7, PD0, OUTPUT)
 FNORD
 
-template $JOYSTICK_DIGITAL_SUPPORT << FNORD
-  /* game input digital joystick */
-  pin(BUTTON_FIRE,  PD6, INPUT)
-  pin(BUTTON_DOWN,  PD5, INPUT)
-  pin(BUTTON_RIGHT, PD4, INPUT)
-  pin(BUTTON_UP,    PD3, INPUT)
-  pin(BUTTON_LEFT,  PD2, INPUT)
+template $BUTTONS_INPUT_SUPPORT << 'FNORD'
+ifdef(`conf_BUTTONS_INPUT', `
+  /* input buttons */
+  pin(BTN_UP, PC2, INPUT)
+  pin(BTN_RIGHT, PC3, INPUT)
+  pin(BTN_DOWN, PC4, INPUT)
+  pin(BTN_LEFT, PC5, INPUT)
+  pin(BTN_FIRE, PD2, INPUT)
+  pin(BTN_FIRE2, PD3, INPUT)
+
+  #define BUTTONS_COUNT 6
+
+  #define BUTTONS_CONFIG(_x) \
+  _x(BTN_UP)\
+  _x(BTN_DOWN)\
+  _x(BTN_LEFT)\
+  _x(BTN_RIGHT)\
+  _x(BTN_FIRE)\
+  _x(BTN_FIRE2)
+')
 FNORD
 
 template $PS2_SUPPORT << FNORD
@@ -187,6 +189,12 @@ FNORD
 template $SD_READER_SUPPORT << FNORD
   /* port the sd-reader CS is attached to */
   pin(SPI_CS_SD_READER, PB2, OUTPUT)
+  /* uncomment and edit this if you have connected the CD (card detect) signal */
+  //pin(SD_READER_AVAILABLE, PD4, INPUT)
+  /* uncomment and edit this if you have connected the WP (write protected) signal */
+  //pin(SD_READER_WR_PROTECT, PD5, INPUT)
+  /* uncomment and edit this if power of the SD card can be switched on/off */
+  //pin(SD_READER_POWERON, PD6, OUTPUT)
 FNORD
 
 template $SOFT_UART_SUPPORT << FNORD
@@ -205,8 +213,9 @@ template $DCF1_USE_PON_SUPPORT << FNORD
   pin(DCF1_PON, PA1, OUTPUT)
 FNORD
 
-template $HD44780_SUPPORT << FNORD
+template $HD44780_DIREKT << FNORD
     pin(HD44780_RS, PA0)
+    pin(HD44780_RW, PA1)
     pin(HD44780_EN1, PA2)
     pin(HD44780_D4, PA3)
     pin(HD44780_D5, PA4)
@@ -214,16 +223,57 @@ template $HD44780_SUPPORT << FNORD
     pin(HD44780_D7, PA6)
 FNORD
 
-template $HD44780_READBACK << FNORD
-    pin(HD44780_RW, PA1)
+template $HD44780_MULTIEN_SUPPORT << FNORD
+    pin(HD44780_EN2, PA7)
 FNORD
 
-template $HD44780_MULTIENSUPPORT << FNORD
-    pin(HD44780_EN2, PA7)
+template $HD44780_I2CSUPPORT << FNORD
+dnl LCD connected via PCF8574x I2C Port Expander
+dnl HD44780_PCF8574x_MAPPING(ADR, RS, RW, EN, DB4, DB5, DB6, DB7, BL)
+dnl Uncomment next line for pollin compatible pinout
+dnl HD44780_PCF8574x_MAPPING(0x20, 4, 5, 6, 0, 1, 2, 3, 7)
+dnl Uncomment next line for arduino compatible pinout
+dnl HD44780_PCF8574x_MAPPING(0x27, 0, 1, 2, 4, 5, 6, 7, 3)
+dnl Use next macro for larger displays with two controllers / enable pins
+dnl HD44780_PCF8574x_MULTI_MAPPING(ADR, RS, RW, EN1, EN2, DB4, DB5, DB6, DB7)
+dnl HD44780_PCF8574x_MULTI_MAPPING(0x20, 4, 5, 6, 7, 0, 1, 2, 3)
+dnl
+dnl LCD connected via MCP23017 I2C Port Expander
+dnl Note: The code assumes that the display is connected to one port
+dnl       of the MCP23017
+dnl HD44780_MCP23017_MAPPING(ADR, RS, RW, EN, DB4, DB5, DB6, DB7, BL)
+dnl HD44780_MCP23017_MAPPING(0x20, B, 4, 5, 6, 0, 1, 2, 3, 7)
+dnl Use next macro for larger displays with two controllers / enable pins
+dnl HD44780_MCP23017_MULTI_MAPPING(ADR, PORT, RS, RW, EN1, EN2, DB4, DB5, DB6, DB7)
+dnl HD44780_MCP23017_MULTI_MAPPING(0x20, B, 4, 5, 6, 7, 0, 1, 2, 3)
+dnl LCD Backlight, might be connected to one pin of another port
+dnl of (probably another) MCP23017 for MULTI-EN LCDs
+dnl HD44780_MCP23017_MULTI_MAPPING_BL(ADR, PORT, BL)
+dnl HD44780_MCP23017_MULTI_MAPPING_BL(0x20, A, 7)
+FNORD
+
+template $HD44780_2WIRE << FNORD
+    pin(HD44780_2WIRE_D, PD4)
+    pin(HD44780_2WIRE_CLK, PD3)
+FNORD
+
+template $HD44780_SERLCD << FNORD
+    pin(HD44780_SER_D, PD4)
+    pin(HD44780_SER_CLK, PD3)
+    pin(HD44780_SER_EN1, PD2)
 FNORD
 
 template $HD44780_BACKLIGHT_SUPPORT << FNORD
     pin(HD44780_BL, PB1, OUTPUT)
+FNORD
+
+template $GLCD_SPI_SUPPORT << FNORD
+    /* Chip select */
+    pin(GLCD_CS, PA0,  OUTPUT)
+    /* Comamnd/Data select */
+    pin(GLCD_CD, PD3, OUTPUT)
+    /* uncomment if you have connected LCDs reset pin */
+    //pin(GLCD_RESET, PD5, OUTPUT)
 FNORD
 
 template $S1D13305_SUPPORT << FNORD
@@ -300,6 +350,11 @@ template $TANKLEVEL_LOCK_SUPPORT << FNORD
   pin(TANKLEVEL_LOCK, PA2, INPUT)
 FNORD
 
+template $SGC_SUPPORT << FNORD
+  /* 4DSystems Slave Graphics Controller */
+ pin(SGC_RESET, PC3, OUTPUT)
+FNORD
+
 template $HEATCTL_SUPPORT << FNORD
   /* heating control outputs */
   pin(HEATCTL_RADIATOR, PC5, OUTPUT)
@@ -315,10 +370,6 @@ FNORD
 HWCLASS=`echo $MCU | sed  's/.*\(.\)/\1/'`
 
 if [ $HWCLASS = 8 ]; then  # ATmega8, 88, 168 and others ...
-  template $ECMD_SERIAL_USART_RS485_SUPPORT << FNORD
-    pin(ECMD_SERIAL_USART_TX, PD2)
-FNORD
-
   template $STATUSLED_POWER_SUPPORT << FNORD
     pin(STATUSLED_POWER, PC6, OUTPUT)
 FNORD
@@ -345,9 +396,19 @@ FNORD
 
   template $RFM12_SUPPORT << FNORD
     /* port the rfm12 module CS is attached to */
-    pin(SPI_CS_RFM12_0, SPI_CS_HARDWARE)
-
+    pin(SPI_CS_RFM12_0, PD5, OUTPUT)
+    dnl pin(SPI_CS_RFM12_1, PD6, OUTPUT)
+    dnl pin(SPI_CS_RFM12_2, PD7, OUTPUT)
     RFM12_USE_INT(0)
+    dnl RFM12_ASK_SENSE_USE_INT(1)
+    dnl RFM12_FS20_USE_INT(1)
+    dnl pin(STATUSLED_RFM12_TX, PD5, OUTPUT)
+    dnl pin(STATUSLED_RFM12_RX, PD6, OUTPUT)
+FNORD
+
+  template $GENERIC_ASK_SUPPORT << FNORD
+    pin(GENERIC_ASK_TX, PA0, OUTPUT)
+    pin(GENERIC_ASK_RX, PD3, OUTPUT)
 FNORD
 
   template $BLP_SUPPORT << FNORD
@@ -387,10 +448,6 @@ FNORD
 #                                                                            #
 ##############################################################################
 else
-  template $ECMD_SERIAL_USART_RS485_SUPPORT << FNORD
-    pin(ECMD_SERIAL_USART_TX, PC2)
-FNORD
-
   template $STATUSLED_POWER_SUPPORT << FNORD
     pin(STATUSLED_POWER, PA0, OUTPUT)
 FNORD
@@ -413,12 +470,6 @@ FNORD
   template $ZBUS_SUPPORT << FNORD
     /* port config for zbus */
     pin(ZBUS_RXTX_PIN, PC2)
-FNORD
-
-  template $RFM12_SUPPORT << FNORD
-    /* port the rfm12 module CS is attached to */
-    pin(SPI_CS_RFM12, PB0, OUTPUT)
-    RFM12_USE_INT(2)
 FNORD
 
   template $BLP_SUPPORT << FNORD
@@ -461,6 +512,12 @@ FNORD
     pin(PSB2186_ALE, PD4, OUTPUT)
 FNORD
 
+  template $MODBUS_SUPPORT << FNORD
+    /* port config for RS485 */
+    /* used by MODBUS and bidirectional DMX */
+    pin(pin(RS485TE_USART0, PD3, OUTPUT)
+FNORD
+
 fi
 
 ) > "pinning/hardware/$hw.m4"
@@ -476,6 +533,8 @@ l_editor() {
     $EDITOR $1
   elif [ -n "`which nano`" ]; then
     nano $1
+  elif [ -n "`which vi`" ]; then
+    vi $1
   fi
 }
 

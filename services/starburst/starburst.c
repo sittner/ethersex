@@ -139,9 +139,9 @@ starburst_process(void)
    */
   static uint8_t pca9685_strobo_counter = 0;
   uint8_t pca9685_strobo =
-    2 * get_dmx_channel_slot(STARBURST_PCA9685_UNIVERSE,
-                             STARBURST_PCA9685_CHANNELS * 2 +
-                             STARBURST_PCA9685_OFFSET, pca9685_dmx_conn_id);
+    2 * get_dmx_channel_slot_raw(STARBURST_PCA9685_UNIVERSE,
+                                 STARBURST_PCA9685_CHANNELS * 2 +
+                                 STARBURST_PCA9685_OFFSET, pca9685_dmx_conn_id);
   if (pca9685_strobo > 0 && pca9685_strobo <= 50)
   {
     if (pca9685_strobo_counter >= 50 / pca9685_strobo)
@@ -165,7 +165,7 @@ starburst_update(void)
 {
 #ifdef STARBURST_PCA9685
 
-  if (get_dmx_universe_state(STARBURST_PCA9685_UNIVERSE, pca9685_dmx_conn_id)
+  if (get_dmx_slot_state(STARBURST_PCA9685_UNIVERSE, pca9685_dmx_conn_id)
       == DMX_NEWVALUES)
   {
     /*Update values if they are really newer */
@@ -174,7 +174,7 @@ starburst_update(void)
     for (uint8_t i = 0; i < STARBURST_PCA9685_CHANNELS; i++)
     {
       tmp =
-        get_dmx_channel_slot(STARBURST_PCA9685_UNIVERSE,
+        get_dmx_channel_slot_raw(STARBURST_PCA9685_UNIVERSE,
                              i + STARBURST_PCA9685_OFFSET +
                              STARBURST_PCA9685_CHANNELS, pca9685_dmx_conn_id);
       pca9685_channels[i].mode = tmp;

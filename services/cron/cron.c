@@ -70,6 +70,15 @@ cron_load()
 #else
   uint16_t position = sizeof(count);
   eeprom_restore_offset(crontab, 0, &count, sizeof(uint8_t));
+
+  /* do not read a bogus crontab from empty eeprom */
+  if (count == 0xFF)
+  {
+#ifdef DEBUG_CRON
+    debug_printf("cron: found bogus cronjob count 0xFF, reset count to zero\n");
+#endif
+    count = 0;
+  }
 #endif
 #ifdef DEBUG_CRON
   debug_printf("cron: file with %i entries found\n", count);
@@ -107,9 +116,17 @@ cron_load()
     wsize = sizeof(struct cron_event) + extrasize;
 #ifdef CRON_VFS_SUPPORT
     if (vfs_fseek(file, position, SEEK_SET) != 0)
+    {
+      free(newone);
+      newone = NULL;
       goto end;
+    }
     if (vfs_read(file, &newone->event, wsize) != wsize)
+    {
+      free(newone);
+      newone = NULL;
       goto end;
+    }
 #else
     eeprom_restore_offset(crontab, position, &newone->event, wsize);
 #endif

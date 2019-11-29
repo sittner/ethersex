@@ -46,10 +46,10 @@ uchar key;
 char *send_buf;
 uint8_t send_pos=0;
 #ifdef USB_HID_KEYBOARD_STATIC_SUPPORT
-PROGMEM char usb_text[]= USB_HID_KEYBOARD_TEXT;
+PROGMEM const char usb_text[]= USB_HID_KEYBOARD_TEXT;
 #endif
 
-PROGMEM char usbHidReportDescriptor[35] = { /* USB report descriptor */
+PROGMEM const char usbHidReportDescriptor[35] = { /* USB report descriptor */
     0x05, 0x01,                    // USAGE_PAGE (Generic Desktop)
     0x09, 0x06,                    // USAGE (Keyboard)
     0xa1, 0x01,                    // COLLECTION (Application)
@@ -188,9 +188,8 @@ int16_t parse_cmd_keyboard_send (char *cmd, char *output, uint16_t len)
 #endif /* USB_HID_KEYBOARD_ECMD_SUPPORT */
 
 uint16_t
-hid_usbFunctionSetup(uchar data[8]) 
+hid_usbFunctionSetup(usbRequest_t * rq)
 {
-  usbRequest_t    *rq = (void *)data;
   USBKEYBOARDDEBUG("setup keyboard\n");
     usbMsgPtr = reportBuffer;
     if((rq->bmRequestType & USBRQ_TYPE_MASK) == USBRQ_TYPE_CLASS){    /* class request type */

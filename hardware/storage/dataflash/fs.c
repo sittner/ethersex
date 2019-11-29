@@ -59,11 +59,6 @@ uint8_t _crc_ibutton_update(uint8_t crc, uint8_t data)
 
 #include <util/crc16.h>
 
-#if 0 /* Enable this for debug messages via syslog support. */
-#  include "protocols/syslog/syslog.h"
-#  define printf(a...) syslog_sendf(a)
-#endif
-
 #ifdef DEBUG_FS
 # define printf  debug_printf
 #else
@@ -810,7 +805,7 @@ fs_status_t fs_create(fs_t *fs, const char *name)
 
 }
 
-fs_status_t fs_remove(fs_t *fs, char *name)
+fs_status_t fs_remove(fs_t *fs, const char *name)
 {
 
     /* search for this filename in the nodetable */
@@ -1042,7 +1037,10 @@ fs_status_t fs_format(fs_t *fs)
     fs_page_t *inode_page = malloc(sizeof(fs_page_t));
 
     if (inode_page == NULL)
+    {
+        free(root);
         return  FS_MEM;
+    }
 
     /* create empty page */
     inode_page->root = 0;

@@ -35,7 +35,7 @@ extern uint8_t usb_packet_ready;
 #  define usb_net_tx_active() (0)
 #endif
 
-usbMsgLen_t usb_net_setup(uint8_t  data[8]);
+usbMsgLen_t usb_net_setup(usbRequest_t *rq);
 uint8_t usb_net_write(uint8_t *data, uint8_t len);
 uint8_t usb_net_read(uint8_t *data, uint8_t len);
 void usb_net_read_finished(void);

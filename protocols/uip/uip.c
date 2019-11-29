@@ -536,7 +536,7 @@ uip_udp_new(uip_ipaddr_t *ripaddr, u16_t rport, uip_conn_callback_t callback)
   register uip_udp_conn_t *conn;
 
   /* Find an unused local port. */
-#ifndef TEENSY_SUPPORT
+#if !defined(TEENSY_SUPPORT) || (GCC_VERSION < 40601)
  again:
 #endif
   ++lastport;
@@ -545,7 +545,7 @@ uip_udp_new(uip_ipaddr_t *ripaddr, u16_t rport, uip_conn_callback_t callback)
     lastport = 4096;
   }
 
-#ifndef TEENSY_SUPPORT
+#if !defined(TEENSY_SUPPORT) || (GCC_VERSION < 40601)
   for(u8_t c = 0; c < UIP_UDP_CONNS; ++c) {
     if(uip_udp_conns[c].lport == htons(lastport)) {
       goto again;
@@ -912,9 +912,15 @@ uip_process(u8_t flag)
 
 #endif /* UIP_BROADCAST */
 
-    /* Check if the packet is destined for our IP address. */
+    /*
+     * Check if the packet is destined for our IP address or the local
+     * address is all zeros. In the latter case we assume that the address
+     * hasn't been configured and accept all packets so that bootp/dhcp can
+     * do their thing.
+     */
 #if !UIP_CONF_IPV6
-    if(!uip_ipaddr_cmp(BUF->destipaddr, uip_hostaddr)) {
+    if(!uip_ipaddr_cmp(BUF->destipaddr, uip_hostaddr) &&
+        (uip_hostaddr[0] != 0 || uip_hostaddr[1] != 0)) {
       UIP_STAT(++uip_stat.ip.drop);
       goto drop;
     }
@@ -1131,8 +1137,8 @@ ip_check_end:
       goto udp_found;
     }
   }
-  DEBUG_PRINTF("udp: no matching connection found, sport %d, dport %d\n",
-               UDPBUF->srcport, UDPBUF->destport);
+  DEBUG_PRINTF("udp: no matching connection found, sport %hu, dport %hu\n",
+               ntohs(UDPBUF->srcport), ntohs(UDPBUF->destport));
   goto drop;
 
  udp_found:
@@ -1593,7 +1599,7 @@ ip_check_end:
     state. We require that there is no outstanding data; otherwise the
     sequence numbers will be screwed up. */
 
-    if(BUF->flags & TCP_FIN && !(uip_connr->tcpstateflags & UIP_STOPPED)) {
+    if((BUF->flags & TCP_FIN) && !(uip_connr->tcpstateflags & UIP_STOPPED)) {
       if(uip_outstanding(uip_connr)) {
 	goto drop;
       }
@@ -1823,13 +1829,15 @@ ip_check_end:
     goto drop;
 
   case UIP_TIME_WAIT:
-    goto tcp_send_ack;
+    //goto tcp_send_ack;
+    goto drop;
 
   case UIP_CLOSING:
     if(uip_flags & UIP_ACKDATA) {
       uip_connr->tcpstateflags = UIP_TIME_WAIT;
       uip_connr->timer = 0;
     }
+    break;
   }
   goto drop;
 
@@ -1946,41 +1954,59 @@ uip_send(const void *data, int len)
   }
 }
 
+#if UIP_TCP == 1
+void
+uip_tcp_timer(void)
+{
+#if UIP_CONNS <= 255
+  uint8_t i;
+#else
+  uint16_t i;
+#endif
+
+  for (i = 0; i < UIP_CONNS; i++) {
+    uip_stack_set_active(uip_conns[i].stack);
+    uip_periodic(i);
+
+    // if this generated a packet, send it now
+    if (uip_len > 0)
+      router_output();
+  }
+
+  return;
+}
+#endif // UIP_TCP == 1
+
+#if UIP_UDP == 1
+void
+uip_udp_timer(void)
+{
+#if UIP_CONNS <= 255
+  uint8_t i;
+#else
+  uint16_t i;
+#endif
+
+  // check udp connections every time
+  for (i = 0; i < UIP_UDP_CONNS; i++) {
+    uip_stack_set_active(uip_udp_conns[i].stack);
+    uip_udp_periodic(i);
+
+    // if this generated a packet, send it now
+    if (uip_len > 0)
+      router_output();
+  }
+
+  return;
+}
+#endif
+
 /** @} */
 
 /*
   -- Ethersex META --
   header(protocols/uip/uip.h)
   header(protocols/uip/uip_router.h)
-  timer(10, ` 
-#       if UIP_CONNS <= 255
-            uint8_t i;
-#       else
-            uint16_t i;
-#endif
-
-#           if UIP_TCP == 1
-            for (i = 0; i < UIP_CONNS; i++) {
-		uip_stack_set_active(uip_conns[i].stack);
-                uip_periodic(i);
-
-                // if this generated a packet, send it now 
-                if (uip_len > 0)
-		    router_output();
-            }
-#           endif // UIP_TCP == 1
-
-#           if UIP_UDP == 1
-            // check udp connections every time 
-            for (i = 0; i < UIP_UDP_CONNS; i++) {
-		uip_stack_set_active(uip_udp_conns[i].stack);
-                uip_udp_periodic(i);
-
-                // if this generated a packet, send it now
-                if (uip_len > 0)
-		    router_output();
-            }
-#           endif
-  
-')
+  ifdef(`conf_TCP', `timer(10, `uip_tcp_timer()')')
+  ifdef(`conf_UDP', `timer(10, `uip_udp_timer()')')
 */

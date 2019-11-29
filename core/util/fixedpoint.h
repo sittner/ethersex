@@ -1,7 +1,8 @@
 /*
 * fixedpoint utils
 *
-* Copyright (c) 2009 by Gerd v. Egidy <gerd@egidy.de>
+* Copyright (c) 2009 Gerd v. Egidy <gerd@egidy.de>
+* Copyright (c) 2013 Erik Kunze <ethersex@erik-kunze.de>
 *
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -24,6 +25,14 @@
 #ifndef _UTIL_FIXEDPOINT_H_
 #define _UTIL_FIXEDPOINT_H_
 
-uint8_t itoa_fixedpoint(int16_t n, uint8_t fixeddigits, char s[]);
+#include <stdint.h>
+
+/* Attention: returns the length in bytes, not a pointer like the regular
+ * itoa this is more convenient for use in output to ECMDs output buffer.
+ * Function needs an integer, the number of fixeddigits, a pointer to
+ * outputbuffer and size of outputbuffer. Its Callers responsibility to
+ * allocate memory for outputbuffer */
+uint8_t itoa_fixedpoint(int16_t n, uint8_t fixeddigits, char s[],
+                        uint8_t size);
 
 #endif

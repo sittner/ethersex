@@ -1,7 +1,8 @@
 /*
 * Fixedpoint utils
 *
-* Copyright (c) 2009 by Gerd v. Egidy <gerd@egidy.de>
+* Copyright (c) 2009 Gerd v. Egidy <gerd@egidy.de>
+* Copyright (c) 2013 Erik Kunze <ethersex@erik-kunze.de>
 *
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -21,59 +22,53 @@
 * http://www.gnu.org/copyleft/gpl.html
 */
 
-#include <avr/io.h>
+#include <stdint.h>
 
 #include "config.h"
-#include "core/debug.h"
-#include "core/util/fixedpoint.h"
+#include "fixedpoint.h"
 
-// Attention: returns the length in bytes, not a pointer like the regular itoa
-// this is more conveniant for use in output to ECMDs output buffer 
-uint8_t itoa_fixedpoint(int16_t n, uint8_t fixeddigits, char s[])
+/* Attention: returns the length in bytes, not a pointer like the regular
+ * itoa this is more convenient for use in output to ECMDs output buffer */
+uint8_t
+itoa_fixedpoint(int16_t n, uint8_t fixeddigits, char s[], uint8_t size)
 {
-    uint8_t i=0, j=0, sign=0, size=0;
+  uint8_t len = 0;
+  if (size <= 1)
+    return 0;
 
-    if (n < 0)
+  if (n < 0)
+  {
+    s[len++] = '-';
+    n = -n;
+  }
+
+/* Number of digits to output */
+/* Output at least fixeddigits + 1 digits */
+  uint8_t digits = 1;
+  int16_t m = 1;
+  while ((m <= n / 10) || (digits < fixeddigits + 1))
+  {
+    m *= 10;
+    digits++;
+  }
+
+  size--;
+  while (digits > 0 && len < size)
+  {
+    uint8_t i;
+/* Decimal point? */
+    if (digits == fixeddigits)
     {
-        /* record sign */
-        sign=1;
-        /* make n positive */
-        n = -n;
+      s[len++] = '.';
     }
+    for (i = '0'; n >= m; n -= m, i++);
+    if (len < size)
+      s[len++] = i;
+    m /= 10;
+    digits--;
+  }
 
-    do
-    {
-        /* generate digits in reverse order */
-        s[i++] = n % 10 + '0';   /* get next digit */
-        if (i == fixeddigits && fixeddigits != 0)
-            s[i++]='.';
-    }
-    while ((n /= 10) > 0);     /* delete it */
+  s[len] = '\0';
 
-    if (i < fixeddigits)
-    {
-        while(i < fixeddigits)
-            s[i++]='0';
-        s[i++]='.';
-    }
-
-    if (sign)
-        s[i++] = '-';
-    s[i] = '\0';
-
-    size=i;
-
-    // in-place reverse
-    i--;
-    while(j<i)
-    {
-        sign = s[j];
-        s[j] = s[i];
-        s[i] = sign;
-        i--;
-        j++;
-    }
-
-    return size;
+  return len;
 }
-

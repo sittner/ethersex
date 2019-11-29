@@ -28,6 +28,8 @@
 #ifndef ONEWIRE_H
 #define ONEWIRE_H
 
+#include "config.h"
+
 /* for an introduction to the onewire bus protocol see
  * http://www.ibutton.com/ibuttons/standard.pdf and the ds18s20 datasheet */
 
@@ -46,21 +48,42 @@
 
 #ifdef ONEWIRE_SUPPORT
 
+#ifdef DEBUG_ECMD_OW_ROM
+#include "core/debug.h"
+#define OW_DEBUG_ROM(str...) debug_printf ("OW-ROM: " str)
+#else
+#define OW_DEBUG_ROM(...)    ((void) 0)
+#endif
+
+#ifdef DEBUG_ECMD_OW_LIST
+#include "core/debug.h"
+#define OW_DEBUG_LIST(str...) debug_printf ("OW-LIST: " str)
+#else
+#define OW_DEBUG_LIST(...)    ((void) 0)
+#endif
+
+#ifdef DEBUG_OW_POLLING
+#include "core/debug.h"
+#define OW_DEBUG_POLL(str...) debug_printf ("OW-POLL: " str)
+#else
+#define OW_DEBUG_POLL(...)    ((void) 0)
+#endif
+
 
 /* rom commands */
-#define OW_ROM_SEARCH_ROM 0xF0
-#define OW_ROM_READ_ROM 0x33
-#define OW_ROM_MATCH_ROM 0x55
-#define OW_ROM_SKIP_ROM 0xCC
-#define OW_ROM_ALARM_SEARCH 0xEC
+#define OW_ROM_SEARCH_ROM     0xF0
+#define OW_ROM_READ_ROM       0x33
+#define OW_ROM_MATCH_ROM      0x55
+#define OW_ROM_SKIP_ROM       0xCC
+#define OW_ROM_ALARM_SEARCH   0xEC
 
 
 /* families */
-#define OW_FAMILY_DS1820 0x10
-#define OW_FAMILY_DS18B20 0x28
-#define OW_FAMILY_DS1822 0x22
-#define OW_FAMILY_DS2502E48 0x89
-#define OW_FAMILY_DS2502 0x09
+#define OW_FAMILY_DS1820      0x10
+#define OW_FAMILY_DS18B20     0x28
+#define OW_FAMILY_DS1822      0x22
+#define OW_FAMILY_DS2502E48   0x89
+#define OW_FAMILY_DS2502      0x09
 
 
 /*
@@ -69,17 +92,17 @@
 
 
 /* temperature */
-#define OW_FUNC_CONVERT 0x44
-#define OW_FUNC_WRITE_SP 0x4E
-#define OW_FUNC_READ_SP 0xBE
-#define OW_FUNC_COPY_SP 0x48
-#define OW_FUNC_RECALL_EE 0xB8
-#define OW_FUNC_READ_POWER 0xB4
+#define OW_FUNC_CONVERT       0x44
+#define OW_FUNC_WRITE_SP      0x4E
+#define OW_FUNC_READ_SP       0xBE
+#define OW_FUNC_COPY_SP       0x48
+#define OW_FUNC_RECALL_EE     0xB8
+#define OW_FUNC_READ_POWER    0xB4
 
 
 /* data (only reading data is supported so far) */
-#define OW_FUNC_READ_MEMORY 0xF0
-#define OW_FUNC_READ_STATUS 0xAA
+#define OW_FUNC_READ_MEMORY   0xF0
+#define OW_FUNC_READ_STATUS   0xAA
 #define OW_FUNC_READ_DATA_CRC 0xC3
 
 /*
@@ -170,6 +193,7 @@ typedef struct
   };
 } ow_rom_code_t;
 
+#ifdef ONEWIRE_DS18XX_SUPPORT
 typedef struct
 {
   union
@@ -197,6 +221,7 @@ typedef struct
     };
   };
 } ow_temp_scratchpad_t;
+#endif
 
 /* naming support */
 #ifdef ONEWIRE_NAMING_SUPPORT
@@ -211,7 +236,14 @@ typedef struct
 } ow_name_t;
 #endif /* ONEWIRE_NAMING_SUPPORT */
 
-#if defined(ONEWIRE_POLLING_SUPPORT) || defined(ONEWIRE_NAMING_SUPPORT)
+#ifdef ONEWIRE_DS18XX_SUPPORT
+typedef struct
+{
+  int16_t val:15;
+  uint8_t twodigits:1;
+} ow_temp_t;
+#endif
+
 typedef struct
 {
   //FIXME: just storing the code and calculate the crc with each call and
@@ -219,28 +251,26 @@ typedef struct
   ow_rom_code_t ow_rom_code;
 
   /* bit fields */
-#ifdef ONEWIRE_POLLING_SUPPORT
-  /* when this is set, we will wait convert_delay to be 0 and then read the
-   * scratchpad */
-  unsigned converted :1;
-  /* this is set during discovery - all sensors with present == 0 will be
-   * deleted after the discovery */
-  unsigned present :1;
-#endif
 #ifdef ONEWIRE_NAMING_SUPPORT
   /* sensor has a name assigned */
-  unsigned named :1;
+  uint8_t named :1;
 #endif
+#ifdef ONEWIRE_ECMD_LIST_POWER_SUPPORT
+  /* power mode (parasite / external) */
+  uint8_t power :1;
+#endif
+  /* this is set during discovery - all sensors with present == 0 will be
+   * deleted after the discovery */
+  uint8_t present :1;
+  /* semaphore for conversion error 85.0°C */
+  uint8_t conv_error :1;
 
   /* byte aligned fields */
-#ifdef ONEWIRE_POLLING_SUPPORT
-  /* just storing the temperature in order to keep memory footfrint as low as
-   * possible. storing temperature in deci degrees (DD) => 36.4° == 364 */
-  int16_t temp;
-  /* time between polling the sensor */
-  uint16_t read_delay;
-  /* need to wait 800ms for the sensor to convert the temperatures */
-  uint8_t convert_delay;
+#ifdef ONEWIRE_DS18XX_SUPPORT
+  /* just storing the temperature in order to keep memory footprint as low as
+   * possible. storing temperature either in decidegrees or centidegrees,
+   * depending on the sensor precision. */
+  ow_temp_t temp;
 #endif
 #ifdef ONEWIRE_NAMING_SUPPORT
   char name[OW_NAME_LENGTH];
@@ -248,14 +278,20 @@ typedef struct
 } ow_sensor_t;
 
 extern ow_sensor_t ow_sensors[OW_SENSORS_COUNT];
-#endif
 
 /*
  * global variables
  */
 typedef struct
 {
-  uint8_t lock;
+  uint8_t lock :1;
+#ifdef ONEWIRE_DS18XX_SUPPORT
+  /* when this is set, we will wait convert_delay to be 0 and then read the
+   * scratchpad */
+  uint8_t converting :1;
+  /* delay for the sensor to convert the temperatures */
+  uint8_t convert_delay :2;
+#endif
   int8_t last_discrepancy;
 #ifdef ONEWIRE_DS2502_SUPPORT
   int8_t list_type;
@@ -337,6 +373,7 @@ int8_t ow_match_rom(ow_rom_code_t * rom);
 int8_t ow_search_rom(uint8_t busmask, uint8_t first);
 
 
+#ifdef ONEWIRE_DS18XX_SUPPORT
 /*
  * temperature functions (DS1820, DS1822)
  */
@@ -361,9 +398,7 @@ int8_t ow_temp_sensor(ow_rom_code_t * rom);
  *   -1: no presence pulse has been detected, no device connected?
  *   -2: family code is unknown
  */
-#define ow_temp_start_convert_wait(rom) ow_temp_start_convert(rom, 1)
-#define ow_temp_start_convert_nowait(rom) ow_temp_start_convert(rom, 0)
-int8_t ow_temp_start_convert(ow_rom_code_t * rom, uint8_t wait);
+int8_t ow_temp_start_convert(ow_rom_code_t * rom);
 
 
 /* read scratchpad memory of sensor with given id (may be null, if only one
@@ -392,13 +427,9 @@ int8_t ow_temp_read_scratchpad(ow_rom_code_t * rom,
 int8_t ow_temp_power(ow_rom_code_t * rom);
 
 
-/* return normalized temperature for device
- *
- * return values:
- * int16_t, 8.8 fixpoint value
- * 0xffff on error (eg unknown device)
- */
-int16_t ow_temp_normalize(ow_rom_code_t * rom, ow_temp_scratchpad_t * sp);
+/* return normalized temperature for device */
+ow_temp_t ow_temp_normalize(ow_rom_code_t * rom, ow_temp_scratchpad_t * sp);
+#endif /* ONEWIRE_DS18XX_SUPPORT */
 
 
 /*
@@ -425,15 +456,13 @@ int8_t ow_eeprom(ow_rom_code_t * rom);
  */
 int8_t ow_eeprom_read(ow_rom_code_t * rom, void *data);
 
-#if defined(ONEWIRE_POLLING_SUPPORT) || defined(ONEWIRE_NAMING_SUPPORT)
 ow_sensor_t *ow_find_sensor(ow_rom_code_t * rom);
-#endif
+int8_t ow_find_sensor_index(ow_rom_code_t * rom);
 
 /* Polling functions */
-#ifdef ONEWIRE_POLLING_SUPPORT
-extern uint16_t ow_discover_delay;
+extern uint16_t ow_discover_interval;
+extern uint16_t ow_polling_interval;
 void ow_periodic(void);
-#endif
 
 /* naming support */
 #ifdef ONEWIRE_NAMING_SUPPORT
@@ -448,7 +477,7 @@ void ow_names_save(void);
 
 /* parse an onewire rom address in cmd string
  *
- * *rom: contains parsed rom adress after sucessul parsing
+ * *rom: contains parsed rom address after successful parsing
  *
  * return values:
  *    0: parsing successful
@@ -457,16 +486,13 @@ void ow_names_save(void);
 int8_t parse_ow_rom(char *cmd, ow_rom_code_t * rom);
 
 
-/* list onewiredevices of requested type on all OW-buses */
+/* list onewire devices of requested type on all OW-buses */
 int16_t parse_cmd_onewire_list(char *cmd, char *output, uint16_t len);
 
 
-/* get temperature of specifued OW-device */
+/* get temperature of specified OW-device */
 int16_t parse_cmd_onewire_get(char *cmd, char *output, uint16_t len);
 
-
-/* issue temperatur convert command on all OW-buses */
-int16_t parse_cmd_onewire_convert(char *cmd, char *output, uint16_t len);
 
 /* naming support */
 #ifdef ONEWIRE_NAMING_SUPPORT
@@ -476,6 +502,20 @@ int16_t parse_cmd_onewire_name_list(char *cmd, char *output, uint16_t len);
 int16_t parse_cmd_onewire_name_save(char *cmd, char *output, uint16_t len);
 #endif /* ONEWIRE_NAMING_SUPPORT */
 
-#endif /* ONEWIRE_SUPPORT */
+#ifdef ONEWIRE_HOOK_SUPPORT
+#define HOOK_NAME ow_poll
+#define HOOK_ARGS (ow_sensor_t * ow_sensor, uint8_t state)
+#include "hook.def"
+#undef HOOK_NAME
+#undef HOOK_ARGS
 
+enum
+{
+  OW_CONVERT,
+  OW_READY
+};
+#endif
+
+#endif /* ONEWIRE_SUPPORT */
 #endif /* ONEWIRE_H */
+

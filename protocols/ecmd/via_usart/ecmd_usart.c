@@ -32,9 +32,20 @@
 #define USE_USART ECMD_SERIAL_USART_USE_USART
 #define BAUD ECMD_SERIAL_BAUDRATE
 #include "core/usart.h"
+#include "pinning.c"
 
-/* We generate our own usart init module, for our usart port */
+
+/* We generate our own usart init, for our usart port,
+ * but only if it is not shared with debug.
+ */
+#if ( (defined(ECMD_SERIAL_USART_SUPPORT) && \
+      !defined(DEBUG_SERIAL_USART_SUPPORT)) || \
+      (defined(ECMD_SERIAL_USART_SUPPORT) && \
+        defined(DEBUG_SERIAL_USART_SUPPORT) && \
+        (ECMD_SERIAL_USART_USE_USART != DEBUG_USE_USART)) )
+#define ECMD_USART_NEED_INIT
 generate_usart_init()
+#endif
 
 static char recv_buffer[ECMD_SERIAL_USART_BUFFER_LEN];
 static char write_buffer[ECMD_SERIAL_USART_BUFFER_LEN + 2];
@@ -44,14 +55,10 @@ static volatile uint8_t must_parse;
 
 void
 ecmd_serial_usart_init(void) {
-  recv_len = 0;
-  must_parse = 0;
-  write_len = 0;
-  /* Initialize the usart module */
-  usart_init();
-#ifdef ECMD_SERIAL_USART_RS485_SUPPORT
-  DDR_CONFIG_OUT(ECMD_SERIAL_USART_TX);
-  PIN_CLEAR(ECMD_SERIAL_USART_TX);
+#ifdef ECMD_USART_NEED_INIT
+  RS485_TE_SETUP;             // configure RS485 transmit enable as output
+  RS485_DISABLE_TX;           // disable RS485 transmitter
+  usart_init();               // initialize the usart module
 #endif
 }
 
@@ -82,9 +89,7 @@ ecmd_serial_usart_periodic(void)
     write_buffer[write_len++] = '\r';
     write_buffer[write_len++] = '\n';
 
-#ifdef ECMD_SERIAL_USART_RS485_SUPPORT
-    PIN_SET(ECMD_SERIAL_USART_TX);
-#endif
+    RS485_ENABLE_TX;
 
     /* Enable the tx interrupt and send the first character */
     sent = 1;
@@ -109,16 +114,18 @@ ISR(usart(USART,_RX_vect))
   if (data == '\n' || data == '\r' || recv_len == sizeof(recv_buffer)) {
     recv_buffer[recv_len] = 0;
     must_parse = 1;
+#ifndef ECMD_SERIAL_NO_ECHO
     usart(UDR) = '\r';
     while (!(usart(UCSR,A) & _BV(usart(UDRE))));
     usart(UDR) = '\n';
     while (!(usart(UCSR,A) & _BV(usart(UDRE))));
+#endif /* ECMD_SERIAL_NO_ECHO */
     return ;
   }
 
-#ifndef ECMD_SERIAL_USART_NO_ECHO
+#ifndef ECMD_SERIAL_NO_ECHO
   usart(UDR) = data;
-#endif /* ECMD_SERIAL_USART_NO_ECHO */
+#endif /* ECMD_SERIAL_NO_ECHO */
 
   recv_buffer[recv_len++] = data;
 }
@@ -134,9 +141,7 @@ ISR(usart(USART,_TX_vect))
 
     write_len = 0;
 
-#ifdef ECMD_SERIAL_USART_RS485_SUPPORT
-    PIN_CLEAR(ECMD_SERIAL_USART_TX);
-#endif
+    RS485_DISABLE_TX;
   }
 }
 

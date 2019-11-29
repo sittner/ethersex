@@ -4,11 +4,12 @@
  * for additional information please
  * see http://www.mikrocontroller.net/articles/IRMP
  *
- * Copyright (c) 2010 by Erik Kunze <ethersex@erik-kunze.de>
+ * Copyright (c) 2010-14 by Erik Kunze <ethersex@erik-kunze.de>
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License (either version 2 or
- * version 3) as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -33,7 +34,7 @@
 #include "irmp.h"
 
 
-#if defined(IRMP_SUPPORT_LEGO_PROTOCOL)
+#if defined(IRMP_SUPPORT_LEGO_PROTOCOL) || defined(IRMP_SUPPORT_RCMM_PROTOCOL)
 #define IRMP_HZ            20000        /* interrupts per second */
 #elif defined(IRMP_SUPPORT_SIEMENS_PROTOCOL) || defined(IRMP_SUPPORT_RECS80_PROTOCOL) || defined(IRMP_SUPPORT_RECS80EXT_PROTOCOL) || defined(IRMP_SUPPORT_RUWIDO_PROTOCOL)
 #define IRMP_HZ            15000
@@ -54,7 +55,7 @@
 #define SET_HW_PRESCALER   TC2_PRESCALER_64
 #elif (F_CPU/IRMP_HZ/256) < MAX_OVERFLOW
 #define HW_PRESCALER       256UL
-#define SET_HW_PRESCALER  _TC2_PRESCALER_256
+#define SET_HW_PRESCALER   TC2_PRESCALER_256
 #elif (F_CPU/IRMP_HZ/1024) < MAX_OVERFLOW
 #define HW_PRESCALER       1024UL
 #define SET_HW_PRESCALER   TC2_PRESCALER_1024
@@ -122,22 +123,21 @@
 
 
 ///////////////
-#ifdef F_INTERRUPTS
-#define __IRMP_F_INTERRUPTS F_INTERRUPTS
-#undef F_INTERRUPTS
-#endif
+#pragma push_macro("F_INTERRUPTS")
 #define F_INTERRUPTS IRMP_HZ
-#ifdef DEBUG
-#define __IRMP_DEBUG
+#pragma push_macro("DEBUG")
 #undef DEBUG
-#endif
 #define IRMP_DATA irmp_data_t
 #define IRMP_USE_AS_LIB
 #ifdef IRMP_RX_SUPPORT
 #define irmp_ISR irmp_rx_process
 #define irmp_get_data irmp_rx_get
+#define irmp_protocol_names irmp_proto_names
 #define IRMP_LOGGING 0
-#include "irmp_lib.c"
+#ifdef DEBUG_IRMP
+#define IRMP_PROTOCOL_NAMES 1
+#endif
+#include "lib/irmp.c"
 #endif
 #ifdef IRMP_TX_SUPPORT
 #define IRSND_SUPPORT
@@ -147,17 +147,14 @@
 #define irsnd_send_data irmp_tx_put
 #define irsnd_set_freq irmp_tx_set_freq
 #define IRSND_USE_AS_LIB
+#undef DENON_AUTO_REPETITION_PAUSE_LEN
 static void irmp_tx_on(void);
 static void irmp_tx_off(void);
 static void irmp_tx_set_freq(uint8_t);
-#include "irsnd_lib.c"
+#include "lib/irsnd.c"
 #endif
-#ifdef __IRMP_DEBUG
-#define DEBUG
-#endif
-#ifdef __IRMP_F_INTERRUPTS
-#define F_INTERRUPTS __F_INTERRUPTS
-#endif
+#pragma pop_macro("DEBUG")
+#pragma pop_macro("F_INTERRUPTS")
 ///////////////
 
 typedef struct
@@ -174,83 +171,14 @@ static irmp_fifo_t irmp_rx_fifo;
 static irmp_fifo_t irmp_tx_fifo;
 #endif
 
-#ifdef DEBUG_IRMP
-static const char proto_unknown[] PROGMEM = "unknown";
-static const char proto_sircs[] PROGMEM = "SIRCS";
-static const char proto_nec[] PROGMEM = "NEC";
-static const char proto_samsung[] PROGMEM = "SAMSUNG";
-static const char proto_matshushita[] PROGMEM = "MATSUSHITA";
-static const char proto_kaseikyo[] PROGMEM = "KASEIKYO";
-static const char proto_recs80[] PROGMEM = "RECS80";
-static const char proto_rc5x[] PROGMEM = "RC5(x)";
-static const char proto_denon[] PROGMEM = "DENON";
-static const char proto_rc6[] PROGMEM = "RC6";
-static const char proto_samsung32[] PROGMEM = "SAMSUNG32";
-static const char proto_apple[] PROGMEM = "APPLE";
-static const char proto_recs80ext[] PROGMEM = "RECS80EXT";
-static const char proto_nubert[] PROGMEM = "NUBERT";
-static const char proto_bang_olufsen[] PROGMEM = "BANG&OLUFSEN";
-static const char proto_grundig[] PROGMEM = "GRUNDIG";
-static const char proto_nokia[] PROGMEM = "NOKIA";
-static const char proto_siemens[] PROGMEM = "SIEMENS";
-static const char proto_fdc[] PROGMEM = "FDC";
-static const char proto_rccar[] PROGMEM = "RCCAR";
-static const char proto_jvc[] PROGMEM = "JVC";
-static const char proto_rc6a[] PROGMEM = "RC6A";
-static const char proto_nikon[] PROGMEM = "NIKON";
-static const char proto_ruwido[] PROGMEM = "RUWIDO";
-static const char proto_ir60[] PROGMEM = "IR60";
-static const char proto_kathrein[] PROGMEM = "KATHREIN";
-static const char proto_netbox[] PROGMEM = "NETBOX";
-static const char proto_nec16[] PROGMEM = "NEC16";
-static const char proto_nec42[] PROGMEM = "NEC42";
-static const char proto_lego[] PROGMEM = "LEGO";
-static const char proto_thomson[] PROGMEM = "THOMSON";
-
-
-const PGM_P const irmp_proto_names[] PROGMEM = {
-  proto_unknown,
-  proto_sircs,
-  proto_nec,
-  proto_samsung,
-  proto_matshushita,
-  proto_kaseikyo,
-  proto_recs80,
-  proto_rc5x,
-  proto_denon,
-  proto_rc6,
-  proto_samsung32,
-  proto_apple,
-  proto_recs80ext,
-  proto_nubert,
-  proto_bang_olufsen,
-  proto_grundig,
-  proto_nokia,
-  proto_siemens,
-  proto_fdc,
-  proto_rccar,
-  proto_jvc,
-  proto_rc6a,
-  proto_nikon,
-  proto_ruwido,
-  proto_ir60,
-  proto_kathrein,
-  proto_netbox,
-  proto_nec16,
-  proto_nec42,
-  proto_lego,
-  proto_thomson,
-};
-#endif
-
 
 void
 irmp_init(void)
 {
 #ifdef IRMP_RX_SUPPORT
   /* configure TSOP input, disable pullup */
-  DDR_CONFIG_IN(IRMP_RX);
-  PIN_CLEAR(IRMP_RX);
+  PIN_CLEAR(IRMP_RX);           /* deactivate pullup */
+  DDR_CONFIG_IN(IRMP_RX);       /* set pin to input */
 #endif
 
 #ifdef STATUSLED_IRMP_RX_SUPPORT
@@ -282,10 +210,18 @@ irmp_init(void)
 #ifndef IRMP_EXTERNAL_MODULATOR
 #ifdef IRMP_USE_TIMER2
   TC0_MODE_CTC;
+#if AVR_PRESCALER == 8
+  TC0_PRESCALER_8;
+#else
   TC0_PRESCALER_1;
+#endif
 #else
   TC2_MODE_CTC;
+#if AVR_PRESCALER == 8
+  TC2_PRESCALER_8;
+#else
   TC2_PRESCALER_1;
+#endif
 #endif
 #endif
   irmp_tx_set_freq(IRSND_FREQ_36_KHZ);  /* default frequency */
@@ -295,25 +231,23 @@ irmp_init(void)
 
 #ifdef IRMP_RX_SUPPORT
 
-uint8_t
-irmp_read(irmp_data_t * irmp_data_p)
+irmp_data_t *
+irmp_read(void)
 {
   if (irmp_rx_fifo.read == irmp_rx_fifo.write)
     return 0;
 
-  *irmp_data_p = irmp_rx_fifo.buffer[irmp_rx_fifo.read =
-                                     FIFO_NEXT(irmp_rx_fifo.read)];
+  irmp_data_t *irmp_data_p =
+    &irmp_rx_fifo.buffer[irmp_rx_fifo.read = FIFO_NEXT(irmp_rx_fifo.read)];
 
 #ifdef DEBUG_IRMP
-  printf_P(PSTR("IRMP RX: proto %02" PRId8 " "), irmp_data_p->protocol);
-  printf_P((const char *)
-           pgm_read_word(&irmp_proto_names[irmp_data_p->protocol]));
-  printf_P(PSTR
-           (", address %04" PRIX16 ", command %04" PRIX16 ", flags %02" PRIX8
-            "\n"), irmp_data_p->address, irmp_data_p->command,
-           irmp_data_p->flags);
+  printf_P(PSTR("IRMP RX: proto %02" PRId8 " %S, address %04" PRIX16
+                ", command %04" PRIX16 ", flags %02" PRIX8 "\n"),
+           irmp_data_p->protocol,
+           pgm_read_word(&irmp_proto_names[irmp_data_p->protocol]),
+           irmp_data_p->address, irmp_data_p->command, irmp_data_p->flags);
 #endif
-  return 1;
+  return irmp_data_p;
 }
 
 #endif
@@ -353,8 +287,9 @@ irmp_tx_off(void)
 #else
     TC2_OUTPUT_COMPARE_NONE;
 #endif
-#endif /* IRMP_EXTERNAL_MODULATOR */
+#else
     PIN_CLEAR(IRMP_TX);
+#endif /* IRMP_EXTERNAL_MODULATOR */
     IRMP_TX_LED_OFF;
     irsnd_is_on = FALSE;
   }
@@ -378,13 +313,11 @@ void
 irmp_write(irmp_data_t * irmp_data_p)
 {
 #ifdef DEBUG_IRMP
-  printf_P(PSTR("IRMP TX: proto %02" PRId8 " "), irmp_data_p->protocol);
-  printf_P((const char *)
-           pgm_read_word(&irmp_proto_names[irmp_data_p->protocol]));
-  printf_P(PSTR
-           (", address %04" PRIX16 ", command %04" PRIX16 ", flags %02" PRIX8
-            "\n"), irmp_data_p->address, irmp_data_p->command,
-           irmp_data_p->flags);
+  printf_P(PSTR("IRMP TX: proto %02" PRId8 " %S, address %04" PRIX16
+                ", command %04" PRIX16 ", flags %02" PRIX8 "\n"),
+           irmp_data_p->protocol,
+           pgm_read_word(&irmp_proto_names[irmp_data_p->protocol]),
+           irmp_data_p->address, irmp_data_p->command, irmp_data_p->flags);
 #endif
 
   uint8_t tmphead = FIFO_NEXT(irmp_tx_fifo.write);

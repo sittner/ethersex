@@ -24,74 +24,152 @@
 #include <avr/interrupt.h>
 #include <util/atomic.h>
 #include <string.h>
+
+#include "config.h"
 #include "yport_net.h"
 #include "protocols/uip/uip.h"
 #include "core/debug.h"
 #include "yport.h"
 
-#include "config.h"
+static uip_conn_t *yport_conn = NULL;
+#if CONF_YPORT_FLUSH > 0
+static uint8_t yport_lastservice;
+#endif
 
-uip_conn_t *yport_conn = NULL;
-
-void yport_net_init(void)
+void
+yport_net_init(void)
 {
   uip_listen(HTONS(YPORT_PORT), yport_net_main);
 }
 
-void yport_net_main(void)
+void
+yport_net_main(void)
 {
-  if(uip_connected()) {
-    if (yport_conn == NULL) {
+#if CONF_YPORT_FLUSH > 0
+  yport_lastservice++;
+#endif
+
+  if (uip_connected())
+  {
+    if (yport_conn == NULL)
+    {
       yport_conn = uip_conn;
       uip_conn->wnd = YPORT_BUFFER_LEN - 1;
+      /* delete the receive buffer */
+      yport_recv_buffer.len = 0;
     }
     else
-      /* if we have already an connection, send an error */
-      uip_send("ERROR: Connection blocked\n", 27);
-  } else if (uip_acked()) {
-    /* If the peer is not our connection, close it */
+    {
+      /* if we already have a connection, send an error */
+      memcpy_P (uip_sappdata, PSTR("ERROR: connection blocked\n"), 27);
+      uip_send (uip_sappdata, 27);
+    }
+  }
+
+  else if (uip_closed() || uip_aborted() || uip_timedout())
+  {
+    /* if the closed connection was our connection, clean yport_conn */
+    if (yport_conn == uip_conn)
+    {
+      yport_conn = NULL;
+      return;
+    }
+  }
+
+  else if (uip_acked())
+  {
+    /* if the peer is not our connection, close it */
     if (yport_conn != uip_conn)
       uip_close();
-    else {
-      /* Some data we have sent was acked, jipphie */
-      ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    else
+    {
+      /* data we have sent was acked */
+      ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+      {
         yport_recv_buffer.len -= yport_recv_buffer.sent;
         memmove(yport_recv_buffer.data,
                 yport_recv_buffer.data + yport_recv_buffer.sent,
                 yport_recv_buffer.len);
       }
     }
-  } else if (uip_closed() || uip_aborted() || uip_timedout()) {
-    /* if the closed connection was our connection, clean yport_conn */
-    if (yport_conn == uip_conn)
-      yport_conn = NULL;
-  } else if (uip_newdata()) {
-    if (uip_len <= YPORT_BUFFER_LEN && yport_rxstart(uip_appdata, uip_len) != 0) {
-      /* Prevent the other side from sending more data */
+  }
+
+  if (yport_conn != uip_conn)
+    return;
+
+  if (uip_newdata())
+  {
+    if (uip_len <= YPORT_BUFFER_LEN &&
+        yport_rxstart(uip_appdata, uip_len) != 0)
+    {
+      /* prevent the other side from sending more data via tcp */
       uip_stop();
     }
   }
-  if (uip_poll()
-      && uip_conn == yport_conn
-      && uip_stopped(yport_conn)
-      && yport_send_buffer.sent == yport_send_buffer.len)
+
+  /* retransmit last packet */
+  if (uip_rexmit())
+  {
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+    {
+      uip_send(yport_recv_buffer.data, yport_recv_buffer.sent);
+    }
+#ifdef DEBUG_YPORT
+    yport_eth_retransmit++;
+#endif
+  }
+
+  /* restart connection */
+  if (uip_poll() &&
+      uip_stopped(yport_conn) &&
+      yport_send_buffer.sent == yport_send_buffer.len)
+  {
     uip_restart();
-  /* Send data */
-  if ((uip_poll()
-       || uip_acked()
-       || uip_rexmit())
-      && yport_conn == uip_conn
-      && yport_recv_buffer.len > 0) {
-    /* We have recieved data, lets propagade it */
-    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+  }
+
+  /* send data */
+  if ((uip_poll() || uip_acked())
+      /* receive buffer reached water mark */
+#if CONF_YPORT_FLUSH > 0
+      && (yport_recv_buffer.len > (YPORT_BUFFER_LEN / 4)
+          /* last transmission is at least one second ago */
+          || yport_lastservice >= CONF_YPORT_FLUSH
+          /* we received a linefeed character, send immediately */
+          || yport_lf)
+#endif
+    )
+  {
+    /* we have enough uart data, send it via tcp */
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+    {
       uip_send(yport_recv_buffer.data, yport_recv_buffer.len);
       yport_recv_buffer.sent = yport_recv_buffer.len;
+#if CONF_YPORT_FLUSH > 0
+      yport_lastservice = 0;
+      yport_lf = 0;
+#endif
     }
   }
 }
+
+#if CONF_YPORT_FLUSH > 0
+void
+yport_net_periodic(void)
+{
+  if (yport_conn)
+  {
+    uip_stack_set_active(yport_conn->stack);
+    uip_conn = yport_conn;
+    uip_process(UIP_TIMER);
+    if (uip_len > 0)
+      router_output();
+  }
+}
+#endif
 
 /*
   -- Ethersex META --
   header(protocols/yport/yport_net.h)
   net_init(yport_net_init)
+  ifdef(`conf_YPORT_FLUSH',`timer(value_YPORT_FLUSH, yport_net_periodic())')
 */

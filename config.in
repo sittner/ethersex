@@ -1,15 +1,15 @@
 source scripts/usart-config.sh
+source scripts/periodic-config.sh
 source scripts/rfm12-config.sh
 source scripts/namedPinCopy.sh
+source scripts/avrdude_config.sh
 mainmenu_name "Ethersex Configuration"
 get_usart_count
+
 
 mainmenu_option next_comment
 comment "General Setup"
 	get_usart_count
-	bool 'Prompt for experimental code' CONFIG_EXPERIMENTAL
-
-	bool 'Prompt all possible options (expert mode)' CONFIG_EXPERT
 
 	choice 'Target Architecture'			\
 		"AVR		ARCH_AVR		\
@@ -28,10 +28,12 @@ if [ "$ARCH_AVR" = "y" ]; then
 		 ATmega169    atmega169		\
 		 ATmega32     atmega32		\
 		 ATmega328p   atmega328p	\
+		 ATmega32u4   atmega32u4	\
 		 ATmega64     atmega64		\
 		 ATmega644    atmega644		\
 		 ATmega644p   atmega644p	\
 		 ATmega1284p  atmega1284p	\
+		 ATmega2560   atmega2560	\
 		 AT90CAN32    at90can32		\
 		 AT90CAN64    at90can64		\
 		 AT90CAN128   at90can128"	\
@@ -43,12 +45,12 @@ if [ "$ARCH_AVR" = "y" ]; then
 			"$(scripts/pinning_hardware_list.sh)" \
 		'Etherrape' HARDWARE
 
-	dep_bool "Use CPU sleep (EXPERIMENTAL)" CPU_SLEEP $ARCH_AVR $CONFIG_EXPERIMENTAL
+	dep_bool "Use CPU sleep" CPU_SLEEP $ARCH_AVR
 	source hardware/sram/config.in
 
 
 	# get the flash size according to the cpu type
-	FLASH_SIZE=$(( `echo -e "#include <avr/io.h>\nFLASHEND" | avr-cpp -mmcu=$MCU | sed '$!d'` + 1 ))
+	FLASH_SIZE=$((`echo -e "#include <avr/io.h>\nFLASHEND" | avr-cpp -P -mmcu=$MCU | sed '$!d'` + 1 ))
 
 	# set the default bootloader bytes according to cpu flash size
 	if [ "$BOOTLOADER_SIZE" = "" ] ; then
@@ -59,62 +61,116 @@ if [ "$ARCH_AVR" = "y" ]; then
 		if [ "$FLASH_SIZE" = 131072 ] ; then BOOTLOADER_SIZE=8192 ; fi
 	fi
 
-	if [ "$FLASH_SIZE" -gt 65535 ] ; then
-		bool 'Build a bootloader' BOOTLOADER_SUPPORT
+	dep_bool 'Build a bootloader'     BOOTLOADER_SUPPORT "$(not $BOOTLOADER_JUMP)"  "$(if [ $FLASH_SIZE -gt 65535 ] ; then echo -ne "y"; else echo -ne "n"; fi)"
+	dep_bool "Enable bootloader jump" BOOTLOADER_JUMP    "$(not $BOOTLOADER_SUPPORT)"
+
+	if [ "$BOOTLOADER_JUMP" = "y" -o "$BOOTLOADER_SUPPORT" = "y" ] ; then
+		int 'Bootloader size in bytes' BOOTLOADER_SIZE ""
 	else
-		dep_bool 'Build a bootloader' BOOTLOADER_SUPPORT "n"
-	fi
-
-
-	if [ "$CONFIG_EXPERT" = "y" ] ; then
-		bool "Enable bootloader jump" BOOTLOADER_JUMP
-		if [ "$BOOTLOADER_JUMP" = "y" -o "$BOOTLOADER_SUPPORT" = "y" ] ; then
-			int 'Bootloader Size in bytes' BOOTLOADER_SIZE ""
-		else
-			define_int BOOTLOADER_SIZE "$((BOOTLOADER_SIZE))"
-		fi
+		define_int BOOTLOADER_SIZE "$((BOOTLOADER_SIZE))"
 	fi
 
 	define_hex BOOTLOADER_START_ADDRESS "$(printf '0x%X\n' $(($FLASH_SIZE - $BOOTLOADER_SIZE)))"
 
 	define_hex FLASH_SIZE "$(printf '0x%X\n' $FLASH_SIZE)"
-	define_hex EEPROM_SIZE "$(printf '0x%X\n' $((`echo -e "#include <avr/io.h>\nE2END" | avr-cpp -mmcu=$MCU | sed '$!d'` + 1)))"
-	define_hex RAM_SIZE "$(printf '0x%X\n' $((`echo -e "#include <avr/io.h>\nRAMEND" | avr-cpp -mmcu=$MCU | sed '$!d'` + 1)))"
-	define_hex FLASH_PAGESIZE "$(printf '0x%X\n' $((`echo -e "#include <avr/io.h>\nSPM_PAGESIZE" | avr-cpp -mmcu=$MCU | sed '$!d'`)))"
-	define_hex EEPROM_PAGESIZE "$(printf '0x%X\n' $((`echo -e "#include <avr/io.h>\nE2PAGESIZE" | avr-cpp -mmcu=$MCU | sed '$!d'`)))"
+	define_hex EEPROM_SIZE "$(printf '0x%X\n' $((`echo -e "#include <avr/io.h>\nE2END" | avr-cpp -P -mmcu=$MCU | sed '$!d'` + 1)))"
+	define_hex RAM_SIZE "$(printf '0x%X\n' $((`echo -e "#include <avr/io.h>\nRAMEND-RAMSTART" | avr-cpp -P -mmcu=$MCU | sed '$!d'` + 1)))"
+	define_hex FLASH_PAGESIZE "$(printf '0x%X\n' $((`echo -e "#include <avr/io.h>\nSPM_PAGESIZE" | avr-cpp -P -mmcu=$MCU | sed '$!d'`)))"
+	define_hex EEPROM_PAGESIZE "$(printf '0x%X\n' $((`echo -e "#include <avr/io.h>\nE2PAGESIZE" | avr-cpp -P -mmcu=$MCU | sed '$!d'`)))"
 
 	source core/crc/config.in
 fi
 
-
+	bool "MBR support" MBR_SUPPORT
 
 	bool "Teensy build" TEENSY_SUPPORT
+
 	dep_bool "Use SPI Timeout" SPI_TIMEOUT $ARCH_AVR
 	dep_bool "Use Usart in SPI Mode" USART_SPI_SUPPORT $ARCH_AVR
-    if [ "$USART_SPI_SUPPORT" = y ]; then
-      choice '  SPI usart select' "$(usart_choice SPI)"
-      usart_process_choice SPI
-    else
-      dep_bool "Use Software-SPI" SOFT_SPI_SUPPORT $ARCH_AVR
-    fi
+	if [ "$USART_SPI_SUPPORT" = y ]; then
+		choice '  SPI usart select' "$(usart_choice SPI)"
+		usart_process_choice SPI
+	else
+		dep_bool "Use Software-SPI" SOFT_SPI_SUPPORT $ARCH_AVR
+	fi
 
-	choice 'Version String'			                    \
-		"GIT-commit-hash       USE_GIT_VERSION	        \
-		Release-Version       USE_RELEASE_VERSION	    \
-		Build-Date-Time       USE_BUILDDATE_VERSION"	\
-		'Release-Version' VERSION_STRING_CHOICE
-
-        if [ "$VERSION_STRING_CHOICE" = "USE_GIT_VERSION" ] || \
-            [ "$VERSION_STRING_CHOICE" = "USE_RELEASE_VERSION" ] ; then
-            define_string VERSION_GIT "$(scripts/get-git-version)"
-        fi
+	define_string GIT_VERSION "$(scripts/get-git-version)"
 
 	bool 'Debug: Discard some packets' DEBUG_DISCARD_SOME
+
+	# general debug support
 	dep_bool_menu "Enable Debugging" DEBUG y
-		int "UART Baudrate" DEBUG_BAUDRATE 115200
-		dep_bool 'Use SYSLOG instead UART' DEBUG_USE_SYSLOG $SYSLOG_SUPPORT $DEBUG
-		dep_bool 'Software Uart (Output only)' SOFT_UART_SUPPORT $DEBUG $ARCH_AVR
-		comment  '----- Debugging Flags -----'
+		comment "Debugging output"
+		usart_count_used
+		debug_output_choices=""
+		# enable choice of USART if there is one used by either
+		# debug or ecmd or if there is at least one unused USART
+		if [ "$DEBUG_SERIAL_USART_SUPPORT" = y \
+			-o "$ECMD_SERIAL_USART_SUPPORT" = y \
+			-o $USARTS -gt $USARTS_USED ]; then
+			debug_output_choices="USART	usart "
+			debug_output_default="USART"
+		else
+			comment "USART (RS232/RS485) not available. No free usart. ($USARTS_USED/$USARTS)"
+		fi
+
+		if [ "$ARCH_AVR" = y ]; then
+			debug_output_choices+="Software-UART soft_uart "
+			test -n "$debug_output_default" || debug_output_default="Software-UART"
+		fi
+
+		# to send debug via syslog one has to enable
+		# protocols > SYSLOG_SUPPORT first
+		if [ "$SYSLOG_SUPPORT" = y ]; then
+			debug_output_choices+="SYSLOG syslog "
+			test -n "$debug_output_default" || debug_output_default="SYSLOG"
+		fi
+
+		if [ "$DEBUG" = y ] && [ -n "$debug_output_choices" ]; then
+			choice 'Debug output channel' \
+			"$debug_output_choices" \
+			"$debug_output_default" DEBUG_OUTPUT
+		fi
+
+		case "$DEBUG_OUTPUT" in
+			"usart")
+				define_bool DEBUG_SERIAL_USART_SUPPORT $DEBUG
+				define_bool SOFT_UART_SUPPORT n
+				define_bool DEBUG_USE_SYSLOG n
+				;;
+			"soft_uart")
+				define_bool SOFT_UART_SUPPORT $DEBUG $ARCH_AVR
+				define_bool DEBUG_SERIAL_USART_SUPPORT n
+				define_bool DEBUG_USE_SYSLOG n
+				;;
+			"syslog")
+				define_bool DEBUG_USE_SYSLOG $DEBUG $SYSLOG_SUPPORT
+				define_bool DEBUG_SERIAL_USART_SUPPORT n
+				define_bool SOFT_UART_SUPPORT n
+				;;
+			*)
+				define_bool DEBUG_USE_SYSLOG $DEBUG n
+				define_bool DEBUG_SERIAL_USART_SUPPORT n
+				define_bool SOFT_UART_SUPPORT n
+				;;
+		esac
+
+		if [ "$DEBUG_SERIAL_USART_SUPPORT" = y ]; then
+			choice 'Debug USART channel' "$(usart_choice DEBUG)"
+			usart_process_choice DEBUG
+			# share ECMD baud settings if the USART is shared
+			if [ "$ECMD_SERIAL_USART_SUPPORT" = y ] && \
+				[ "$DEBUG_USE_USART" = "$ECMD_SERIAL_USART_USE_USART" ] ; then
+					define_int DEBUG_BAUDRATE $ECMD_SERIAL_BAUDRATE
+					comment "USART Baudrate set to match ECMD setting ($DEBUG_BAUDRATE Baud)."
+			else
+				int "USART Baudrate" DEBUG_BAUDRATE 115200
+			fi
+		elif [ "$SOFT_UART_SUPPORT" = y ]; then
+			int "Software-UART Baudrate" DEBUG_BAUDRATE 19200
+		fi
+		dep_bool 'Watchdog in debug mode' DEBUG_USE_WATCHDOG $DEBUG
+		comment  'Debugging Flags'
 		dep_bool 'Hooks' DEBUG_HOOK $DEBUG
 		dep_bool 'Reset Reason' DEBUG_RESET_REASON $DEBUG
 	endmenu
@@ -151,12 +207,7 @@ mainmenu_option next_comment
 
 		Value=$NET_MAX_FRAME_LENGTH
 
-		if [ "$CONFIG_EXPERT" = "y" ] ; then
-			int "Network Buffer Size" NET_MAX_FRAME_LENGTH ""
-		else
-			Value=$NET_MAX_FRAME_LENGTH
-			define_int NET_MAX_FRAME_LENGTH $Value
-		fi
+		int "Network Buffer Size" NET_MAX_FRAME_LENGTH $NET_MAX_FRAME_LENGTH
 #	fi
 
 	source hardware/ethernet/config.in
@@ -237,7 +288,6 @@ mainmenu_option next_comment
 	dep_bool '  OpenVPN' DEBUG_OPENVPN $DEBUG
 	dep_bool '  Router' DEBUG_ROUTER $DEBUG
 	dep_bool '  uIP' DEBUG_UIP $DEBUG
-	dep_bool '  NTP' DEBUG_NTP $DEBUG
 	dep_bool '  Unknown packets' DEBUG_UNKNOWN_PACKETS $DEBUG_NET
 
 endmenu
@@ -259,110 +309,28 @@ comment "I/O"
 			Simple PORTIO_SCHEME
 
 		if [ x"$PORTIO_SCHEME" = x"PORTIO_SIMPLE" ]; then
-			define_bool PORTIO_SIMPLE_SUPPORT y;
+			define_bool PORTIO_SIMPLE_SUPPORT y
+			define_bool PORTIO_SUPPORT n
 		elif [ x"$PORTIO_SCHEME" = x"PORTIO_FULL_FEATURED" ]; then
-			define_bool PORTIO_SUPPORT y;
+			define_bool PORTIO_SIMPLE_SUPPORT n
+			define_bool PORTIO_SUPPORT y
 		fi
 
 		source core/portio/config.in
 	fi
 
 	source core/tty/config.in
-	source hardware/io_expander/config.in
-	source hardware/adc/config.in
-	source hardware/sms/config.in
-	source hardware/adc/kty/config.in
-	source hardware/adc/ads7822/config.in
-	source hardware/dac/config.in
-	source hardware/lcd/config.in
-	source hardware/i2c/master/config.in
-	source hardware/camera/config.in
-	source hardware/radio/fs20/config.in
-	source hardware/ir/config.in
-	source hardware/isdn/config.in
-	source hardware/pwm/config.in
-	source hardware/onewire/config.in
-	source hardware/input/config.in
-	source hardware/input/ps2/config.in
-	source hardware/input/buttons/config.in
-	source hardware/radio/rfm12/rfm12_ask_config.in
-	source hardware/sht/config.in
-	source hardware/zacwire/config.in
-	source hardware/ultrasonic/config.in
-	source hardware/hbridge/config.in
+	source hardware/config.in
 	source mcuf/config.in
-	source hardware/storage/sd_reader/config.in
-	source hardware/serial_ram/config.in
 endmenu
 
 ###############################################################################
 
-mainmenu_option next_comment
-comment "Protocols"
-
-source protocols/artnet/config.in
-source protocols/dali/config.in
-source protocols/dmx/config.in
-source protocols/ecmd/config.in
-source protocols/fnordlicht/config.in
-source protocols/httplog/config.in
-source protocols/irc/config.in
-source protocols/mdns_sd/config.in
-source protocols/modbus/config.in
-source protocols/mysql/config.in
-source protocols/netstat/config.in
-source protocols/soap/config.in
-source protocols/snmp/config.in
-source protocols/smtp/config.in
-source protocols/sms77/config.in
-source protocols/syslog/config.in
-source protocols/twitter/config.in
-source protocols/ustream/config.in
-source protocols/yport/config.in
-source protocols/msr1/config.in
-source protocols/to1/config.in
-source protocols/serial_line_log/config.in
-source protocols/nmea/config.in
-source protocols/udpstella/config.in
-source protocols/udpIO/config.in
-source protocols/udpcurtain/config.in
-source protocols/cw/config.in
-endmenu
+source protocols/config.in
 
 ###############################################################################
 
-
-mainmenu_option next_comment
-comment "Applications"
-
-source services/appsample/config.in
-source services/bulbdial/config.in
-source services/clock/config.in
-source services/cron/config.in
-source services/dyndns/config.in
-source services/dmx-storage/config.in
-source services/dmx-fxslot/config.in
-source services/echo/config.in
-source services/wol/config.in
-source services/motd/config.in
-source services/heatctl/config.in
-source services/httpd/config.in
-source services/jabber/config.in
-source services/moodlight/config.in
-source services/stella/config.in
-source services/starburst/config.in
-source services/curtain/config.in
-source services/tftp/config.in
-source services/upnp/config.in
-source services/watchcat/config.in
-source services/vnc/config.in
-source services/watchasync/config.in
-source services/glcdmenu/config.in
-source services/lome6/config.in
-source services/projectors/sanyoZ700/config.in
-source services/freqcount/config.in
-source services/tanklevel/config.in
-endmenu
+source services/config.in
 
 ###############################################################################
 
@@ -380,4 +348,11 @@ fi
 
 if [ "$UIP_SUPPORT" = "y" -a "$IPV6_SUPPORT" != "y" ]; then
   define_bool IPV4_SUPPORT y
+fi
+
+if [ "$HAS_AVRDUDE" = "y" ]; then
+  mainmenu_option next_comment
+    comment "AVRDUDE configuration"
+    source scripts/avrdude_config.in
+  endmenu
 fi

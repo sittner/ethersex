@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2009 by Stefan Krupop <mail@stefankrupop.de>
  * Copyright (c) 2009 by Dirk Pannenbecker <dp@sd-gp.de>
- * Copyright (c) 2011-2012 by Maximilian Güntner <maximilian.guentner@gmail.com>
+ * Copyright (c) 2011-2016 by Maximilian Güntner <maximilian.guentner@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -43,6 +43,7 @@
 #include "services/dmx-storage/dmx_storage.h"
 #ifdef ARTNET_SUPPORT
 
+#define BUF ((struct uip_udpip_hdr *) (uip_appdata - UIP_IPUDPH_LEN))
 
 /* ----------------------------------------------------------------------------
  *global variables
@@ -51,8 +52,8 @@
 uint8_t artnet_subNet = SUBNET_DEFAULT;
 uint8_t artnet_outputUniverse;
 uint8_t artnet_inputUniverse;
-uint8_t artnet_sendPollReplyOnChange = TRUE;
-uint64_t artnet_pollReplyTarget = (uint64_t) 0xffffffff;
+uip_ipaddr_t artnet_outputTarget;
+uint8_t artnet_sendPollReplyOnChange;
 uint32_t artnet_pollReplyCounter = 0;
 uint8_t artnet_status = RC_POWER_OK;
 char artnet_shortName[18] = { '\0' };
@@ -88,6 +89,26 @@ artnet_init(void)
 {
 
   ARTNET_DEBUG("Init\n");
+  /* read Art-Net port */
+  artnet_port = CONF_ARTNET_PORT;
+  /* read netconfig */
+  artnet_netConfig = NETCONFIG_DEFAULT;
+
+  /* read subnet */
+  artnet_subNet = SUBNET_DEFAULT;
+  artnet_inputUniverse = CONF_ARTNET_INUNIVERSE;
+  artnet_outputUniverse = CONF_ARTNET_OUTUNIVERSE;
+#ifdef CONF_ARTNET_SEND_POLL_REPLY
+  artnet_sendPollReplyOnChange = 1;
+#else
+  artnet_sendPollReplyOnChange = 0;
+#endif
+  strcpy_P(artnet_shortName, PSTR("e6ArtNode"));
+  strcpy_P(artnet_longName, PSTR("e6ArtNode hostname: " CONF_HOSTNAME));
+
+  set_CONF_ARTNET_OUTPUT_IP(&artnet_outputTarget);
+
+  /* dmx storage connection */
   artnet_conn_id = dmx_storage_connect(artnet_inputUniverse);
   if (artnet_conn_id != -1)
   {
@@ -100,23 +121,13 @@ artnet_init(void)
     artnet_connected = FALSE;
     ARTNET_DEBUG("Connection to dmx-storage couldn't be established!\r\n");
   }
-  /* read Art-Net port */
-  artnet_port = CONF_ARTNET_PORT;
-  /* read netconfig */
-  artnet_netConfig = NETCONFIG_DEFAULT;
 
-  /* read subnet */
-  artnet_subNet = SUBNET_DEFAULT;
-  artnet_inputUniverse = CONF_ARTNET_INUNIVERSE;
-  artnet_outputUniverse = CONF_ARTNET_OUTUNIVERSE;
-  strcpy_P(artnet_shortName, PSTR("e6ArtNode"));
-  strcpy_P(artnet_longName, PSTR("e6ArtNode hostname: " CONF_HOSTNAME));
-
+  /* net_init */
   artnet_netInit();
 
   /* annouce that we are here  */
   ARTNET_DEBUG("send PollReply\n");
-  artnet_sendPollReply();
+  artnet_sendPollReply(&all_ones_addr);
 
   /* enable PollReply on changes */
   artnet_sendPollReplyOnChange = TRUE;
@@ -125,11 +136,10 @@ artnet_init(void)
 }
 
 static void
-artnet_send(uint16_t len)
+artnet_send(const uip_ipaddr_t *dest, uint16_t len)
 {
   uip_udp_conn_t artnet_conn;
-  artnet_conn.ripaddr[0] = uip_hostaddr[0] | ~uip_netmask[0];
-  artnet_conn.ripaddr[1] = uip_hostaddr[1] | ~uip_netmask[1];
+  uip_ipaddr_copy(&(artnet_conn.ripaddr), dest);
   artnet_conn.rport = HTONS(artnet_port);
   artnet_conn.lport = HTONS(artnet_port);
   uip_udp_conn = &artnet_conn;
@@ -146,7 +156,7 @@ artnet_send(uint16_t len)
  * send an ArtPollReply packet
  */
 void
-artnet_sendPollReply(void)
+artnet_sendPollReply(const uip_ipaddr_t *dest)
 {
 
   /* prepare artnet PollReply packet */
@@ -198,8 +208,8 @@ artnet_sendPollReply(void)
 
   memcpy(msg->mac, uip_ethaddr.addr, 6);
 
-  /* broadcast the packet */
-  artnet_send(sizeof(struct artnet_pollreply));
+  /* send packet to dest */
+  artnet_send(dest, sizeof(struct artnet_pollreply));
 }
 
 /* ----------------------------------------------------------------------------
@@ -230,37 +240,42 @@ artnet_sendDmxPacket(void)
   msg->lengthHi = HI8(DMX_STORAGE_CHANNELS);
   msg->length = LO8(DMX_STORAGE_CHANNELS);
   for (uint8_t i = 0; i < DMX_STORAGE_CHANNELS; i++)
-    (&(msg->dataStart))[i] =
+    msg->dataStart[i] =
       get_dmx_channel_slot(artnet_inputUniverse, i, artnet_conn_id);
-  /* broadcast the packet */
-  artnet_send(sizeof(struct artnet_dmx) + DMX_STORAGE_CHANNELS);
+  /* send packet to artnet_outputTarget */
+  artnet_send(&artnet_outputTarget, sizeof(struct artnet_dmx) + DMX_STORAGE_CHANNELS);
 }
 
 int16_t
 parse_cmd_artnet_pollreply(int8_t * cmd, int8_t * output, uint16_t len)
 {
-  artnet_sendPollReply();
+  artnet_sendPollReply(&all_ones_addr);
   return ECMD_FINAL_OK;
 }
 
 void
 processPollPacket(struct artnet_poll *poll)
 {
+  uip_ipaddr_t poll_reply_target;
   if ((poll->talkToMe & 2) == 2)
     artnet_sendPollReplyOnChange = TRUE;
   else
     artnet_sendPollReplyOnChange = FALSE;
   if ((poll->talkToMe & 1) == 1)
-    artnet_pollReplyTarget = *uip_hostaddr;
+    uip_ipaddr_copy(poll_reply_target, uip_hostaddr);
   else
-    artnet_pollReplyTarget = (uint64_t) 0xffffffff;
-  artnet_sendPollReply();
+    uip_ipaddr_copy(poll_reply_target, all_ones_addr);
+  artnet_sendPollReply(&poll_reply_target);
+
+  /* we send a dmx packet on a poll packet, if artnet_sendPollReplyOnChange is active */
+  if (artnet_sendPollReplyOnChange)
+    artnet_sendDmxPacket();
 }
 
 void
 artnet_main(void)
 {
-  if (get_dmx_universe_state(artnet_inputUniverse, artnet_conn_id) ==
+  if (get_dmx_slot_state(artnet_inputUniverse, artnet_conn_id) ==
       DMX_NEWVALUES && artnet_connected == TRUE)
   {
     ARTNET_DEBUG("Universe has changed, sending artnet data!\r\n");
@@ -299,21 +314,24 @@ artnet_get(void)
       ARTNET_DEBUG("Received artnet poll reply packet!\r\n");
       break;
     case OP_OUTPUT:;
+      uip_ipaddr_t artnet_pollReplyTarget;
       struct artnet_dmx *dmx;
 
       ARTNET_DEBUG("Received artnet output packet!\r\n");
       dmx = (struct artnet_dmx *) uip_appdata;
+      uip_ipaddr_copy(&artnet_pollReplyTarget, BUF->srcipaddr);
 
       if (dmx->universe == ((artnet_subNet << 4) | artnet_outputUniverse))
       {
         if (artnet_dmxDirection == 0)
         {
           uint16_t len = ((dmx->lengthHi << 8) + dmx->length);
-          set_dmx_channels(&dmx->dataStart, artnet_outputUniverse, len);
+          set_dmx_channels((const uint8_t *) &dmx->dataStart,
+                           artnet_outputUniverse, 0, len);
           if (artnet_sendPollReplyOnChange == TRUE)
           {
             artnet_pollReplyCounter++;
-            artnet_sendPollReply();
+            artnet_sendPollReply(&artnet_pollReplyTarget);
           }
         }
       }

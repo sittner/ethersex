@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2006-2011 by Roland Riegel <feedback@roland-riegel.de>
+ * Copyright (c) 2006-2012 by Roland Riegel <feedback@roland-riegel.de>
  *
  * This file is free software; you can redistribute it and/or modify
  * it under the terms of either the GNU General Public License version 2
@@ -43,7 +43,7 @@ extern "C"
  *
  * Set to 1 to enable LFN support, set to 0 to disable it.
  */
-#define FAT_LFN_SUPPORT 1
+#define FAT_LFN_SUPPORT SD_LFN_SUPPORT
 
 /**
  * \ingroup fat_config
@@ -51,7 +51,7 @@ extern "C"
  * 
  * Set to 1 to enable FAT date and time stamping support.
  */
-#define FAT_DATETIME_SUPPORT 0
+#define FAT_DATETIME_SUPPORT SD_DATETIME_SUPPORT
 
 /**
  * \ingroup fat_config

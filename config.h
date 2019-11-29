@@ -1,5 +1,4 @@
 /*
- *
  * (c) by Alexander Neumann <alexander@bumpern.de>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -35,29 +34,6 @@
 #define ENC28J60_REV5_WORKAROUND
 #define ENC28J60_REV6_WORKAROUND  /* rev is 6; but microchip calls it B7 */
 
-/* global version defines */
-#define USE_BUILDDATE_VERSION 1
-#define USE_GIT_VERSION 2
-#define USE_RELEASE_VERSION 3
-
-#if VERSION_STRING_CHOICE == USE_BUILDDATE_VERSION
-    #define VERSION_STRING __DATE__ " " __TIME__
-#else
-#if VERSION_STRING_CHOICE == USE_GIT_VERSION
-    #define VERSION_STRING VERSION_GIT
-#else
-#if VERSION_STRING_CHOICE == USE_RELEASE_VERSION
-    #define xstr_(s) str_(s)
-    #define str_(s) #s
-    #define VERSION_MAJOR 0
-    #define VERSION_MINOR 2
-    #define VERSION_STRING xstr_(VERSION_MAJOR)"."xstr_(VERSION_MINOR)" ("VERSION_GIT")"
-#else
-    #warning No Version choosen
-#endif
-#endif
-#endif
-
 /* configure duplex mode */
 #define NET_FULL_DUPLEX 0
 
@@ -70,9 +46,6 @@
 
 /* rc5 support */
 #define RC5_QUEUE_LENGTH 10
-
-/* bootloader config */
-#define CONF_BOOTLOAD_DELAY 250           /* five seconds */
 
 /* rfm12 config */
 #define RFM12_FREQ_433920	433920
@@ -97,7 +70,7 @@
 #include "pinning.c"
 
 /* use watchdog only when not debugging */
-#ifndef DEBUG
+#if !defined(DEBUG) || defined(DEBUG_USE_WATCHDOG)
 #   define USE_WATCHDOG
 #endif
 
@@ -117,7 +90,7 @@
 #  define set_CONF_ETHERSEX_MAC(ip)		set_CONF_ENC_MAC(ip)
 #  define set_CONF_ETHERSEX_IP(ip)		set_CONF_ENC_IP(ip)
 #  define set_CONF_ETHERSEX_IP4_NETMASK(ip)	set_CONF_ENC_IP4_NETMASK(ip)
-#  define CONF_ETHERSEX_MAC		CONF_ENC_MAC
+#  define CONF_ETHERSEX_MAC			CONF_ENC_MAC
 
 #elif defined (TAP_SUPPORT)
 #  define set_CONF_ETHERSEX_MAC(ip)		set_CONF_TAP_MAC(ip)
@@ -141,37 +114,41 @@
 /* ADC Reference Flags */
 #define ADC_AREF	0
 #define ADC_AVCC	0x40
-#define ADC_1_1	    0x80
-#define ADC_2_56    0xC0
+#define ADC_1_1		0x80
+#define ADC_2_56	0xC0
 
 /* Figure out whether we need access to EEPROM:
-
    - ECMD without TEENSY (IP address configuration etc.)
    - BOOTP with to-EEPROM-feature
-   - STELLA with eeprom load/write support */
-#if (defined(ECMD_PARSER_SUPPORT) && (!defined(TEENSY_SUPPORT)))  \
-  || (defined(BOOTP_SUPPORT) && defined(BOOTP_TO_EEPROM_SUPPORT)) \
-  || (defined(STELLA_SUPPORT) && !defined(TEENSY_SUPPORT))
+   - STELLA with eeprom load/write support
+   - JABBER with configuration in eeprom
+   - ONEWIRE temperature sensors with names in eeprom */
+#if (defined(ECMD_PARSER_SUPPORT) && !defined(TEENSY_SUPPORT))   || \
+    (defined(BOOTP_SUPPORT) && defined(BOOTP_TO_EEPROM_SUPPORT)) || \
+    (defined(STELLA_SUPPORT) && !defined(TEENSY_SUPPORT))        || \
+    defined(JABBER_EEPROM_SUPPORT)                               || \
+    (defined(ONEWIRE_NAMING_SUPPORT) && !defined(TEENSY_SUPPORT))
 #  define EEPROM_SUPPORT 1
 #endif
 
 
 /* Figure out whether we need CRC_SUPPORT: */
-#if defined(EEPROM_SUPPORT)			\
-  || defined(ONEWIRE_SUPPORT)			\
-  || defined(VFS_INLINE_SUPPORT)		\
-  || defined(TFTP_SUPPORT)
+#if defined(EEPROM_SUPPORT)     || \
+    defined(ONEWIRE_SUPPORT)    || \
+    defined(VFS_INLINE_SUPPORT) || \
+    defined(TFTP_SUPPORT)
 #  define CRC_SUPPORT 1
 #endif
 
-#if defined(VFS_SUPPORT) && defined(VFS_INLINE_SUPPORT)	  \
-  && !defined(VFS_SD_SUPPORT) && !defined(VFS_DF_SUPPORT) \
-  && !defined(VFS_EEPROM_SUPPORT)			  \
-  && !defined(VFS_EEPROM_RAW_SUPPORT)			  \
-  && !defined(VFS_DC3840_SUPPORT)
+#if defined(VFS_SUPPORT)             && \
+    defined(VFS_INLINE_SUPPORT)	     && \
+    !defined(VFS_SD_SUPPORT)         && \
+    !defined(VFS_DF_SUPPORT)         && \
+    !defined(VFS_EEPROM_SUPPORT)     && \
+    !defined(VFS_EEPROM_RAW_SUPPORT) && \
+    !defined(VFS_DC3840_SUPPORT)
 #  define VFS_TEENSY 1
 #endif
-
 
 
 #endif /* _CONFIG_H */

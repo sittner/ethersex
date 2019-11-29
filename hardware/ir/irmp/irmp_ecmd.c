@@ -4,11 +4,12 @@
  * for additional information please
  * see http://www.mikrocontroller.net/articles/IRMP
  *
- * Copyright (c) 2010 by Erik Kunze <ethersex@erik-kunze.de>
+ * Copyright (c) 2010-14 by Erik Kunze <ethersex@erik-kunze.de>
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License (either version 2 or
- * version 3) as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -29,27 +30,30 @@
 #include "config.h"
 #include "core/bit-macros.h"
 #include "core/debug.h"
-#include "hardware/ir/irmp/irmp.h"
-
 #include "protocols/ecmd/ecmd-base.h"
 
+#include "irmp.h"
+#include "irmp_ecmd.h"
 
 #ifdef IRMP_RX_SUPPORT
 
 int16_t
 parse_cmd_irmp_receive(char *cmd, char *output, uint16_t len)
 {
-  irmp_data_t irmp_data;
-  return (irmp_read(&irmp_data)
+  (void) cmd;
+  (void) len;
+
+  irmp_data_t *irmp_data_p = irmp_read();
+  return (irmp_data_p != 0
           ? ECMD_FINAL(sprintf_P(output,
                                  PSTR("%02" PRIu8 ":"
                                       "%04" PRIX16 ":"
                                       "%04" PRIX16 ":"
                                       "%02" PRIX8 "\n"),
-                                 irmp_data.protocol,
-                                 irmp_data.address,
-                                 irmp_data.command,
-                                 irmp_data.flags)) : ECMD_FINAL_OK);
+                                 irmp_data_p->protocol,
+                                 irmp_data_p->address,
+                                 irmp_data_p->command,
+                                 irmp_data_p->flags)) : ECMD_FINAL_OK);
 }
 
 #endif
@@ -59,6 +63,9 @@ parse_cmd_irmp_receive(char *cmd, char *output, uint16_t len)
 int16_t
 parse_cmd_irmp_send(char *cmd, char *output, uint16_t len)
 {
+  (void) output;
+  (void) len;
+
   int16_t ret;
   irmp_data_t irmp_data;
 

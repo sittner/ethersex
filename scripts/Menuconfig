@@ -85,7 +85,7 @@ function define_bool () {
 }
 
 function define_symbol () {
-	true	# nothing to do, for the moment ...
+	eval $1=$2
 }
 
 function define_hex () {
@@ -188,6 +188,17 @@ function int () {
 }
 
 #
+# Add a menu item which will call our local int function.
+#
+function int_min_max_step () {
+	set_x_info "$2" "$3"
+
+	echo -ne "'$2' '($x) $1$info' " >>MCmenu
+
+	echo -e "function $2 () { l_int_min_max_step '$1' '$2' '$3' '$4' '$5' '$6' '$x' ;}" >>MCradiolists
+}
+
+#
 # Add a menu item which will call our local hex function.
 # 
 function hex () {
@@ -282,6 +293,17 @@ function ipv6 () {
 	echo -ne "'$2' '     $1: \"$x\"$info' " >>MCmenu
 
 	echo -e "function $2 () { l_ipv6 '$1' '$2' '$3' '$x' ;}" >>MCradiolists
+}
+
+#
+# Negate the boolean value. Usesful for dep_XXX
+#
+function not() {
+	if [ "$1" = "y" ] ; then
+		echo -ne "n"
+	else
+		echo -ne "y"
+	fi
 }
 
 #
@@ -545,6 +567,41 @@ function l_int () {
 				${DIALOG} --backtitle "$backtitle" \
 					--infobox "You have made an invalid entry." 3 43
 				sleep 2
+			fi
+
+			break
+		fi
+
+		help "$2" "$1"
+	done
+}
+
+#
+# Create a dialog for entering an integer into a kernel option.
+#
+function l_int_min_max_step () {
+	while true
+	do
+		if $DIALOG --title "$1" \
+			--backtitle "$backtitle" \
+			--inputbox "$inputbox_instructions_int" \
+			10 75 "$7" 2>MCdialog.out
+		then
+			answer="`cat MCdialog.out`"
+			answer="${answer:-$3}"
+
+			# Semantics of + and ? in GNU expr changed, so
+			# we avoid them:
+			if expr '(' "$answer" : '0$' '|' "$answer" : '[1-9][0-9]*$' '|' "$answer" : '-[1-9][0-9]*$' ')' \
+			  '&' "$answer" '>=' $4 '&' "$answer" '<=' $5 '&' '(' "$answer" '%' $6 ')' = 0 >/dev/null
+			then
+				eval $2=\"$answer\"
+			else
+				eval $2=\"$3\"
+				echo -en "\007"
+				${DIALOG} --backtitle "$backtitle" \
+					--msgbox "You have made an invalid entry." 5 43
+#				sleep 2
 			fi
 
 			break
@@ -1069,18 +1126,25 @@ Select the default profile you wish to load. \
 			fimser		  "Fieldday Instant Messenger"			0 \
 			probot		  "Conrad Probot"				0 \
 			arduino_duemilanove "Arduino Duemilanove"			0 \
+			arduino_mega2560_r3 "Arduino Mega2560 R3"			0 \
+			arduino_pro_mini  "Arduino Pro Mini"				0 \
+			arduino_pro_micro "Arduino Pro Micro"				0 \
 			rfm12-teensy	  "RFM12 Standalone"				0 \
 			zbus-teensy	  "ZBUS Standalone"				0 \
 			usb-teensy	  "USB (Network) Standalone"			0 \
 			usb-rfm12-dongle  "USB RFM12 Dongle"				0 \
-			USBrfm12stick  "USB RFM12 Stick"				0 \
+			USBrfm12stick     "USB RFM12 Stick"				0 \
 			ehaserl		  "EH2010 Ehaserl Badge"			0 \
-			fnordlicht_servo "Fnordlicht Servo"			0 \
+			fnordlicht_servo  "Fnordlicht Servo"				0 \
 			no-network	  "No Networking (USB only)"			0 \
 			JeeLinkv2	  "Jeelabs JeeLinkv2 (FTDI-ZBUS, RFM12)"	0 \
 			hr20		  "Rondostat HR20/Thermotronic Basic/Thermy"	0 \
 			lome6		  "lome6 - lights out management for ethersex"	0 \
 			alpengluehn	  "Alpengluehn 16 Channel LED Driver Hardware"	0 \
+			antares_O     "Antares O - AT90CAN, 40 Outputs, DIN rail"   0 \
+			antares_I     "Antares I - AT90CAN, 32 Inputs, DIN rail"    0 \
+			antares_IO    "Antares IO - AT90CAN, 16 I, 16 O, uSDcard, DIN rail"    0 \
+			beteigeuze	  "Beteigeuze - AT90CAN, 42 I/O, Unterputzdose" 0 \
 			 2>MCdialog.out
 
 		exit_status=$?
@@ -1301,6 +1365,12 @@ save_configuration () {
 	}
 
 	function int () {
+		set_x_info "$2" "$3"
+		echo "$2=$x" 		>>$CONFIG
+		echo "#define $2 ($x)"	>>$CONFIG_H
+	}
+
+	function int_min_max_step () {
 		set_x_info "$2" "$3"
 		echo "$2=$x" 		>>$CONFIG
 		echo "#define $2 ($x)"	>>$CONFIG_H

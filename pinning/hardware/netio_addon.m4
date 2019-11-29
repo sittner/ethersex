@@ -23,11 +23,14 @@ ifdef(`conf_RFM12', `dnl
 ')
 
 ifdef(`conf_IRMP', `dnl
-pin(IRMP_RX, PB0)
-#define IRMP_USE_TIMER0
+dnl pin(IRMP_RX, PD3)
+#undef IRMP_USE_TIMER2
 #define IRMP_RX_LOW_ACTIVE
-#undef IRMP_RX_LED_LOW_ACTIVE 
-pin(STATUSLED_IRMP_RX, PD7, OUTPUT)
+#undef IRMP_RX_LED_LOW_ACTIVE
+dnl pin(STATUSLED_IRMP_RX, PC3, OUTPUT)
+pin(IRMP_TX, PD7) dnl OC2/OC2A
+#undef IRMP_TX_LED_LOW_ACTIVE
+dnl pin(STATUSLED_IRMP_TX, PC2, OUTPUT)
 ')
 
 ifdef(`conf_STATUSLED_POWER', `dnl
@@ -49,3 +52,17 @@ ifdef(`conf_DCF77', `dnl
   DCF77_USE_INT(1, PD3)
   pin(DCF1_PON, PA1, OUTPUT)
 ')dnl
+
+ifelse(value_HD44780_CONNECTION,`HD44780_I2CSUPPORT',`dnl
+  ifelse(value_HD44780_I2C_PORTEXP,`HD44780_I2C_PCF8574',`dnl
+    ifdef(`conf_HD44780_MULTIEN',
+      `dnl
+         dnl HD44780_PCF8574x_MULTI_MAPPING(ADR, RS, RW, EN1, EN2, DB4, DB5, DB6, DB7)
+         HD44780_PCF8574x_MULTI_MAPPING(0x20, 4, 5, 6, 7, 0, 1, 2, 3)',
+      `dnl
+         dnl HD44780_PCF8574x_MAPPING(ADR, RS, RW, EN, DB4, DB5, DB6, DB7, BL)
+         HD44780_PCF8574x_MAPPING(0x20, 4, 5, 6, 0, 1, 2, 3, 7)'
+    )dnl
+  ')dnl
+')dnl
+

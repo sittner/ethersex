@@ -2,6 +2,8 @@
  *
  * Copyright (c) 2007 by Christian Dietrich <stettberger@dokucode.de>
  * Copyright (c) 2008 by Stefan Siegl <stesie@brokenpipe.de>
+ * Copyright (c) 2015 by Daniel Lindner <daniel.lindner@gmx.de>
+ * Copyright (c) 2019 by Erik Kunze <ethersex@erik-kunze.de>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -24,23 +26,11 @@
 #ifndef _SYSLOG_H
 #define _SYSLOG_H
 
-#include <avr/pgmspace.h>
-#include "protocols/uip/uip.h"
+#include <stdint.h>
 
-#define MAX_DYNAMIC_SYSLOG_BUFFER 500
-
-uint8_t syslog_send_P(PGM_P message);
 uint8_t syslog_send(const char *message);
-uint8_t syslog_sendf(const char *message, ...);
-uint8_t syslog_sendf_P(PGM_P message, ...);
-uint8_t syslog_send_ptr(void *message);
+uint8_t syslog_sendf_P(const char *message, ...);
 
-void syslog_flush (void);
-
-/* Check the ARP/Neighbor cache for the necessary entries;
-   return 0 if it's safe to send syslog data. */
-uint8_t syslog_check_cache(void);
-
-uip_ipaddr_t *syslog_getserver(void);
+void syslog_flush(void);
 
 #endif /* _SYSLOG_H */

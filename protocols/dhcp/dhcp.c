@@ -40,6 +40,8 @@
 #include "dhcp_state.h"
 #include "dhcp.h"
 
+#include "services/ntp/ntp.h"
+
 #define STATE_INITIAL         0
 #define STATE_DISCOVERING     1
 #define STATE_REQUESTING      2
@@ -83,7 +85,8 @@ struct dhcp_msg {
 #define DHCP_OPTION_SUBNET_MASK   1
 #define DHCP_OPTION_ROUTER        3
 #define DHCP_OPTION_DNS_SERVER    6
-#define DHCP_OPTION_HOSTNAME    12
+#define DHCP_OPTION_HOSTNAME     12
+#define DHCP_OPTION_NTP_SERVER   42
 #define DHCP_OPTION_REQ_IPADDR   50
 #define DHCP_OPTION_LEASE_TIME   51
 #define DHCP_OPTION_MSG_TYPE     53
@@ -129,20 +132,21 @@ static uint8_t *
 add_req_options(uint8_t *optptr)
 {
   *optptr++ = DHCP_OPTION_REQ_LIST;
-  *optptr++ = 3;
+  *optptr++ = 4;
   *optptr++ = DHCP_OPTION_SUBNET_MASK;
   *optptr++ = DHCP_OPTION_ROUTER;
   *optptr++ = DHCP_OPTION_DNS_SERVER;
+  *optptr++ = DHCP_OPTION_NTP_SERVER;
   return optptr;
 }
 /*---------------------------------------------------------------------------*/
 static uint8_t *
 add_hostname(uint8_t *optptr)
 {
-  int len = strlen(CONF_HOSTNAME);
+  int len = sizeof(CONF_HOSTNAME);
   *optptr++ = DHCP_OPTION_HOSTNAME;
   *optptr++ = len;
-  memcpy(optptr, CONF_HOSTNAME, len);
+  memcpy_P(optptr, PSTR(CONF_HOSTNAME), len);
   return optptr + len;
 }
 /*---------------------------------------------------------------------------*/
@@ -246,6 +250,9 @@ parse_options(uint8_t *optptr, int len)
     case DHCP_OPTION_SERVER_ID:
       memcpy(uip_udp_conn->appstate.dhcp.serverid, optptr + 2, 4);
       break;
+    case DHCP_OPTION_NTP_SERVER:
+      memcpy(uip_udp_conn->appstate.dhcp.ntpaddr, optptr + 2, 4);
+      break;
     case DHCP_OPTION_LEASE_TIME:
       memcpy(uip_udp_conn->appstate.dhcp.lease_time, optptr + 2, 4);
       break;
@@ -285,8 +292,6 @@ void dhcp_set_static(void) {
 #ifdef EEPROM_SUPPORT
   /* Please Note: ip and &ip are NOT the same (cpp hell) */
   eeprom_restore_ip(ip, &ip);
-#else
-  set_CONF_ETHERSEX_IP(&ip);
 #endif
   uip_sethostaddr(&ip);
   
@@ -295,8 +300,6 @@ void dhcp_set_static(void) {
 #ifdef EEPROM_SUPPORT
   /* Please Note: ip and &ip are NOT the same (cpp hell) */
   eeprom_restore_ip(netmask, &ip);
-#else
-  set_CONF_ETHERSEX_IP4_NETMASK(&ip);
 #endif
   uip_setnetmask(&ip);
   
@@ -304,8 +307,6 @@ void dhcp_set_static(void) {
 #ifdef EEPROM_SUPPORT
   /* Please Note: ip and &ip are NOT the same (cpp hell) */
   eeprom_restore_ip(gateway, &ip);
-#else
-  set_CONF_ETHERSEX_GATEWAY(&ip);
 #endif
   uip_setdraddr(&ip);
   
@@ -375,6 +376,11 @@ void dhcp_net_main(void) {
 #ifdef DNS_SUPPORT
 	resolv_conf(uip_udp_conn->appstate.dhcp.dnsaddr);
 	//	eeprom_save(dns_server, &uip_udp_conn->appstate.dhcp.dnsaddr, IPADDR_LEN);
+#endif
+
+#ifdef NTP_SUPPORT
+	ntp_conf(uip_udp_conn->appstate.dhcp.ntpaddr);
+	//	eeprom_save(ntp_server, &uip_udp_conn->appstate.dhcp.ntpaddr, IPADDR_LEN);
 #endif
 
 	// eeprom_save(ip, &uip_udp_conn->appstate.dhcp.ipaddr, IPADDR_LEN);

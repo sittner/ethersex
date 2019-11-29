@@ -5,20 +5,27 @@ if [ "$YPORT_SUPPORT" = y -o $USARTS -gt $USARTS_USED ]; then
 		usart_process_choice YPORT
 		int    "YPort TCP Port" YPORT_PORT 7970
 		int    "YPort Baudrate" YPORT_BAUDRATE 115200
+		
+		choice '  YPort usart config'	\
+				"8N1      	YPORT_USART_CONFIG_8N1		\
+				 8E2		YPORT_USART_CONFIG_8E2"	\
+				'8N1' YPORT_USART_CONFIG
 
 		if [ "$YPORT_BUFFER_LEN" = "" ] ; then
-			YPORT_BUFFER_LEN=255
+			YPORT_BUFFER_LEN=500
 		fi
 		if [ "$YPORT_BUFFER_LEN" -gt "$NET_MAX_FRAME_LENGTH" ] ; then
 			YPORT_BUFFER_LEN=$NET_MAX_FRAME_LENGTH
 		fi
-		if [ "$CONFIG_EXPERT" = "y" ] ; then
-			int    "YPort Buffer Length" YPORT_BUFFER_LEN ""
+		int    "YPort Buffer Length" YPORT_BUFFER_LEN 500
+		int    "YPort Max Buffer Flush Interval (N*20ms)" CONF_YPORT_FLUSH 25
+		if [ "$CONF_YPORT_FLUSH" -gt "0" ]; then
+			define_bool YPORT_FLUSH_SUPPORT y
 		else
-			define_int YPORT_BUFFER_LEN 32
+			define_bool YPORT_FLUSH_SUPPORT n
 		fi
-	comment  "Debugging Flags"
-	dep_bool 'YPORT Debug' DEBUG_YPORT $YPORT_SUPPORT
+		comment  "Debugging Flags"
+		dep_bool 'YPORT Debug' DEBUG_YPORT $YPORT_SUPPORT
 	endmenu
 else
 	define_bool YPORT_SUPPORT n

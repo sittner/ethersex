@@ -1,4 +1,8 @@
-dep_bool_menu "IR Receivers" IR_SUPPORT $ARCH_AVR
-	source hardware/ir/rc5/config.in
-	source hardware/ir/irmp/config.in
+mainmenu_option next_comment
+
+  comment "IR Receivers"
+
+  source hardware/ir/rc5/config.in
+  source hardware/ir/irmp/config.in
+
 endmenu

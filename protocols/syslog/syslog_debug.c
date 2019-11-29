@@ -2,6 +2,7 @@
  *
  * Copyright (c) 2007 by Christian Dietrich <stettberger@dokucode.de>
  * Copyright (c) 2008 by Stefan Siegl <stesie@brokenpipe.de>
+ * Copyright (c) 2015 by Daniel Lindner <daniel.lindner@gmx.de>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -21,22 +22,43 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
+#include <stdio.h>
+
+#include "config.h"
 #include "protocols/syslog/syslog.h"
 #include "protocols/syslog/syslog_debug.h"
 
+#define MAX_SYSLOG_DEBUG_BUFFER 100
+
+static FILE syslog_stream = FDEV_SETUP_STREAM(syslog_debug_put, NULL,
+                                             _FDEV_SETUP_WRITE);
+static char syslog_debug_buf[MAX_SYSLOG_DEBUG_BUFFER + 1];
+static uint8_t syslog_debug_buf_offset;
+
 int
-syslog_debug_put (char d, FILE *stream)
+syslog_debug_put(char d, FILE * stream)
 {
-  char buf[2] = { d, 0 };
-  syslog_send (buf);
+  if (d != '\n')
+  {
+    syslog_debug_buf[syslog_debug_buf_offset++] = d;
+    syslog_debug_buf[syslog_debug_buf_offset] = 0;
+  }
+
+  if (d == '\n' || syslog_debug_buf_offset >= MAX_SYSLOG_DEBUG_BUFFER)
+  {
+    syslog_send(syslog_debug_buf);
+    syslog_debug_buf_offset = 0;
+    syslog_debug_buf[syslog_debug_buf_offset] = 0;
+  }
 
   return 0;
 }
 
 void
-syslog_debug_init (void)
+syslog_debug_init(void)
 {
-  fdevopen(syslog_debug_put, NULL);
+  stdout = &syslog_stream;
+  stderr = &syslog_stream;
 }
 
 /*

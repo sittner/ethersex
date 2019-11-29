@@ -117,6 +117,8 @@ uint16_t heatctl_circpump_timer;
 #define HEATCTL_WHM_IS_ACTIVE PIN_HIGH(HEATCTL_WHM)
 #endif
 
+#define OW_TO_HDC(temp) (temp.twodigits ? temp.val : temp.val * 10)
+
 void
 heatctl_init(void)
 {
@@ -146,9 +148,9 @@ heatctl_periodic(void)
   heatctl_last_time = ts;
 
   // read temperatures
-  heatctl_boiler_temp = ow_sensors[HEATCTL_OW_IDX_BOILER].temp;
-  heatctl_hotwater_temp = ow_sensors[HEATCTL_OW_IDX_HOTWATER].temp;
-  heatctl_outdoor_temp = ow_sensors[HEATCTL_OW_IDX_OUTDOOR].temp;
+  heatctl_boiler_temp = OW_TO_HDC(ow_sensors[HEATCTL_OW_IDX_BOILER].temp);
+  heatctl_hotwater_temp = OW_TO_HDC(ow_sensors[HEATCTL_OW_IDX_HOTWATER].temp);
+  heatctl_outdoor_temp = OW_TO_HDC(ow_sensors[HEATCTL_OW_IDX_OUTDOOR].temp);
 
   // get setpoints
   uint8_t service = 0;

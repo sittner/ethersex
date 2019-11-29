@@ -39,7 +39,7 @@ const char mode_str_hotw[] PROGMEM = "hotw";
 const char mode_str_radi[] PROGMEM = "radi";
 const char mode_str_serv[] PROGMEM = "serv";
 
-const char *mode_str_tab[] PROGMEM = {
+const char * const mode_str_tab[] PROGMEM = {
   mode_str_manu,
   mode_str_auto,
   mode_str_hotw,

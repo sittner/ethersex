@@ -31,6 +31,10 @@ dep_bool_menu "Heating Control" HEATCTL_SUPPORT $UPTIME_SUPPORT $ONEWIRE_SUPPORT
 	if  [ "$HEATCTL_INLINE_SUPPORT" = "y" ] ; then
 		int "Request hot water Button item index" HEATCTL_HOTWATER_REQ_INDEX 1
 	fi
+	dep_bool "MQTT support" HEATCTL_MQTT_SUPPORT $HEATCTL_SUPPORT $MQTT_SUPPORT
+	if  [ "$HEATCTL_MQTT_SUPPORT" = "y" ] ; then
+		string "MQTT Topic" HEATCTL_MQTT_TOPIC "heatctl"
+	fi
 endmenu
 
 

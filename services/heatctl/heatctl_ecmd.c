@@ -33,13 +33,13 @@
 
 #include "protocols/ecmd/ecmd-base.h"
 
-const char mode_str_manu[] PROGMEM = "manu";
-const char mode_str_auto[] PROGMEM = "auto";
-const char mode_str_hotw[] PROGMEM = "hotw";
-const char mode_str_radi[] PROGMEM = "radi";
-const char mode_str_serv[] PROGMEM = "serv";
+static const char mode_str_manu[] PROGMEM = "manu";
+static const char mode_str_auto[] PROGMEM = "auto";
+static const char mode_str_hotw[] PROGMEM = "hotw";
+static const char mode_str_radi[] PROGMEM = "radi";
+static const char mode_str_serv[] PROGMEM = "serv";
 
-const char * const mode_str_tab[] PROGMEM = {
+static const char * const mode_str_tab[] PROGMEM = {
   mode_str_manu,
   mode_str_auto,
   mode_str_hotw,

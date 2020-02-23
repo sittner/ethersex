@@ -36,12 +36,35 @@
 #include "services/heatctl/heatctl_mqtt.h"
 
 
-#define HEATCTL_PUBLISH_NAME_FORMAT     HEATCTL_MQTT_TOPIC "/%S"
-#define HEATCTL_MQTT_RETAIN             false
-#define TOPIC_LENGTH                    (32)
-#define VALUE_LENGTH                    (32)
+#define MQTT_RETAIN             false
 
-static const char publish_name_topic_format[] PROGMEM = HEATCTL_PUBLISH_NAME_FORMAT;
+#define MQTT_STATE_START         0
+#define MQTT_STATE_IDLE         -1
+#define MQTT_STATE_DISABLED     -2
+
+static const char topic_mode[] PROGMEM = HEATCTL_MQTT_TOPIC "/mode";
+static const char topic_boiler_temp[] PROGMEM = HEATCTL_MQTT_TOPIC "/boiler_temp";
+static const char topic_boiler_setpoint[] PROGMEM = HEATCTL_MQTT_TOPIC "/boiler_setpoint";
+static const char topic_burner_on[] PROGMEM = HEATCTL_MQTT_TOPIC "/burner_on";
+static const char topic_outdoor_temp[] PROGMEM = HEATCTL_MQTT_TOPIC "/outdoor_temp";
+static const char topic_radiator_index[] PROGMEM = HEATCTL_MQTT_TOPIC "/radiator_index";
+static const char topic_radiator_setpoint[] PROGMEM = HEATCTL_MQTT_TOPIC "/radiator_setpoint";
+static const char topic_radiator_on[] PROGMEM = HEATCTL_MQTT_TOPIC "/radiator_on";
+static const char topic_hotwater_temp[] PROGMEM = HEATCTL_MQTT_TOPIC "/hotwater_temp";
+static const char topic_hotwater_index[] PROGMEM = HEATCTL_MQTT_TOPIC "/hotwater_index";
+static const char topic_hotwater_req[] PROGMEM = HEATCTL_MQTT_TOPIC "/hotwater_req";
+static const char topic_hotwater_setpoint[] PROGMEM = HEATCTL_MQTT_TOPIC "/hotwater_setpoint";
+static const char topic_hotwater_on[] PROGMEM = HEATCTL_MQTT_TOPIC "/hotwater_on";
+static const char topic_uptime[] PROGMEM = HEATCTL_MQTT_TOPIC "/uptime";
+static const char topic_radiator_on_time[] PROGMEM = HEATCTL_MQTT_TOPIC "/radiator_on_time";
+static const char topic_hotwater_on_time[] PROGMEM = HEATCTL_MQTT_TOPIC "/hotwater_on_time";
+static const char topic_burner_on_time[] PROGMEM = HEATCTL_MQTT_TOPIC "/burner_on_time";
+static const char topic_request_hotwater[] PROGMEM = HEATCTL_MQTT_TOPIC "/request_hotwater";
+#ifdef HEATCTL_CIRCPUMP_SUPPORT
+static const char topic_circpump_on[] PROGMEM = HEATCTL_MQTT_TOPIC "/circpump_on";
+static const char topic_circpump_on_time[] PROGMEM = HEATCTL_MQTT_TOPIC "/circpump_on_time";
+static const char topic_request_circpump[] PROGMEM = HEATCTL_MQTT_TOPIC "/request_circpump";
+#endif
 
 static const char mode_str_manu[] PROGMEM = "manual";
 static const char mode_str_auto[] PROGMEM = "automatic";
@@ -58,154 +81,172 @@ static const char * const mode_str_tab[] PROGMEM = {
   NULL
 };
 
-static int8_t heatctl_mqtt_state = -1;
+static int8_t mqtt_state = MQTT_STATE_DISABLED;
 
-static void send_str(const char *name, const char *value)
+static bool send_str(PGM_P topic, const char *value)
 {
-  char topic[TOPIC_LENGTH];
+  if (!mqtt_construct_publish_packet_P(topic, value, strlen(value), MQTT_RETAIN)) {
+    return false;
+  }
 
-  snprintf_P(topic, TOPIC_LENGTH, publish_name_topic_format, name);
-  mqtt_construct_publish_packet(topic, value, strlen(value), HEATCTL_MQTT_RETAIN);
-
-  heatctl_mqtt_state++;
+  mqtt_state++;
+  return true;
 }
 
-static void send_temp(const char *name, int16_t value)
+static bool send_temp(PGM_P topic, int16_t value)
 {
   char buf[8];
 
   itoa_fixedpoint(value, 2, buf, sizeof(buf));
-  send_str(name, buf);
+  return send_str(topic, buf);
 }
 
-static void send_bool(const char *name, uint8_t value)
+static bool send_bool(PGM_P topic, uint8_t value)
 {
   char buf[8];
 
   strncpy_P(buf, value ? PSTR("true") : PSTR("false"), sizeof(buf));
-  send_str(name, buf);
+  return send_str(topic, buf);
 }
 
-static void send_idx(const char *name, int8_t value)
+static bool send_idx(PGM_P topic, int8_t value)
 {
   char buf[8];
 
   itoa(value, buf, 10);
-  send_str(name, buf);
+  return send_str(topic, buf);
 }
 
-static void send_mode(const char *name, uint8_t value)
+static bool send_mode(PGM_P topic, uint8_t value)
 {
-  char buf[8];
+  char buf[16];
 
-  strncpy_P(buf, mode_str_tab[value], sizeof(buf));
-  send_str(name, buf);
+  strncpy_P(buf, (const char *) pgm_read_word(&mode_str_tab[value]), sizeof(buf));
+  return send_str(topic, buf);
 }
 
-static void send_timestamp(const char *name, timestamp_t value)
+static bool send_timestamp(PGM_P topic, timestamp_t value)
 {
   ldiv_t dv_min;
   ldiv_t dv_hr;
-  char buf[12];
+  char buf[16];
 
   dv_min = ldiv(value, 60);
   dv_hr = ldiv(dv_min.quot, 60);
   snprintf_P(buf, sizeof(buf),
-    PSTR("ctrl on time: %lu:%02lu:%02lu"),
+    PSTR("%lu:%02lu:%02lu"),
     dv_hr.quot, dv_hr.rem, dv_min.rem);
-  send_str(name, buf);
+  return send_str(topic, buf);
 }
 
-void
-heatctl_poll_cb(void)
+static void connack_cb(void)
 {
-  if (heatctl_mqtt_state < 0)
+  mqtt_state = MQTT_STATE_IDLE;
+}
+
+static void poll_cb(void)
+{
+  bool ok;
+
+  if (mqtt_state < 0)
     return;
 
-  switch (heatctl_mqtt_state)
-  {
-    case 0:
-      send_mode(PSTR("mode"), heatctl_eeprom.mode);
-      break;
-    case 1:
-      send_temp(PSTR("boiler_temp"), heatctl_boiler_temp);
-      break;
-    case 2:
-      send_temp(PSTR("boiler_setpoint"), heatctl_boiler_setpoint);
-      break;
-    case 3:
-      send_bool(PSTR("burner_on"), heatctl_burner_on);
-      break;
-    case 4:
-      send_temp(PSTR("outdoor_temp"), heatctl_outdoor_temp);
-      break;
-    case 5:
-      send_idx(PSTR("radiator_index"), heatctl_radiator_index);
-      break;
-    case 6:
-      send_temp(PSTR("radiator_setpoint"), heatctl_radiator_setpoint);
-      break;
-    case 7:
-      send_bool(PSTR("radiator_on"), heatctl_radiator_on);
-      break;
-    case 8:
-      send_temp(PSTR("hotwater_temp"), heatctl_hotwater_temp);
-      break;
-    case 9:
-      send_idx(PSTR("hotwater_index"), heatctl_hotwater_index);
-      break;
-    case 10:
-      send_idx(PSTR("hotwater_req"), heatctl_hotwater_req);
-      break;
-    case 11:
-      send_temp(PSTR("hotwater_setpoint"), heatctl_hotwater_setpoint);
-      break;
-    case 12:
-      send_bool(PSTR("hotwater_on"), heatctl_hotwater_on);
-      break;
-    case 13:
-      send_timestamp(PSTR("uptime"), clock_get_uptime());
-      break;
-    case 14:
-      send_timestamp(PSTR("radiator_on_time"), heatctl_radiator_on_time);
-      break;
-    case 15:
-      send_timestamp(PSTR("hotwater_on_time"), heatctl_hotwater_on_time);
-      break;
-    case 16:
-      send_timestamp(PSTR("burner_on_time"), heatctl_burner_on_time);
-      break;
+  do {
+    switch (mqtt_state)
+    {
+      case 0:
+        ok = send_mode(topic_mode, heatctl_eeprom.mode);
+        break;
+      case 1:
+        ok = send_temp(topic_boiler_temp, heatctl_boiler_temp);
+        break;
+      case 2:
+        ok = send_temp(topic_boiler_setpoint, heatctl_boiler_setpoint);
+        break;
+      case 3:
+        ok = send_bool(topic_burner_on, heatctl_burner_on);
+        break;
+      case 4:
+        ok = send_temp(topic_outdoor_temp, heatctl_outdoor_temp);
+        break;
+      case 5:
+        ok = send_idx(topic_radiator_index, heatctl_radiator_index);
+        break;
+      case 6:
+        ok = send_temp(topic_radiator_setpoint, heatctl_radiator_setpoint);
+        break;
+      case 7:
+        ok = send_bool(topic_radiator_on, heatctl_radiator_on);
+        break;
+      case 8:
+        ok = send_temp(topic_hotwater_temp, heatctl_hotwater_temp);
+        break;
+      case 9:
+        ok = send_idx(topic_hotwater_index, heatctl_hotwater_index);
+        break;
+      case 10:
+        ok = send_idx(topic_hotwater_req, heatctl_hotwater_req);
+        break;
+      case 11:
+        ok = send_temp(topic_hotwater_setpoint, heatctl_hotwater_setpoint);
+        break;
+      case 12:
+        ok = send_bool(topic_hotwater_on, heatctl_hotwater_on);
+        break;
+      case 13:
+        ok = send_timestamp(topic_uptime, clock_get_uptime());
+        break;
+      case 14:
+        ok = send_timestamp(topic_radiator_on_time, heatctl_radiator_on_time);
+        break;
+      case 15:
+        ok = send_timestamp(topic_hotwater_on_time, heatctl_hotwater_on_time);
+        break;
+      case 16:
+        ok = send_timestamp(topic_burner_on_time, heatctl_burner_on_time);
+        break;
 #ifdef HEATCTL_CIRCPUMP_SUPPORT
-    case 17:
-      send_bool(PSTR("circpump_on"), heatctl_circpump_on);
-      break;
-    case 18:
-      send_timestamp(PSTR("circpump_on_time"), heatctl_circpump_on_time);
-      break;
+      case 17:
+        ok = send_bool(topic_circpump_on, heatctl_circpump_on);
+        break;
+      case 18:
+        ok = send_timestamp(topic_circpump_on_time, heatctl_circpump_on_time);
+        break;
 #endif
-    default:
-      heatctl_mqtt_state = -1;
-  }
+      default:
+        mqtt_state = MQTT_STATE_IDLE;
+        return;
+    }
+  } while (ok);
+}
+
+static void close_cb(void)
+{
+  mqtt_state = MQTT_STATE_DISABLED;
+}
+
+static void publish_cb(char const *topic, uint16_t topic_length,
+                       const void *payload, uint16_t payload_length,
+                       bool retained)
+{
 }
 
 static const mqtt_callback_config_t mqtt_callback_config PROGMEM = {
-  .connack_callback = NULL,
-  .poll_callback = heatctl_poll_cb,
-  .close_callback = NULL,
-  .publish_callback = NULL,
+  .connack_callback = connack_cb,
+  .poll_callback = poll_cb,
+  .close_callback = close_cb,
+  .publish_callback = publish_cb
 };
 
-void
-heatctl_mqtt_init()
+void heatctl_mqtt_init()
 {
   mqtt_register_callback(&mqtt_callback_config);
 }
 
-void
-heatctl_mqtt_periodic(void)
+void heatctl_mqtt_periodic(void)
 {
-  if (heatctl_mqtt_state < 0) {
-    heatctl_mqtt_state = 0;
+  if (mqtt_state == MQTT_STATE_IDLE) {
+    mqtt_state = MQTT_STATE_START;
   }
 }
 

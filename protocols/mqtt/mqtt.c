@@ -366,8 +366,8 @@ mqtt_buffer_write_length_field(uint8_t * buffer, uint16_t length)
   uint8_t pos = 0;
   do
   {
-    digit = length % 128;
-    length = length / 128;
+    digit = length & 0x7f;
+    length >>= 7;
     if (length > 0)
     {
       digit |= 0x80;

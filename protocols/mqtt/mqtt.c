@@ -161,7 +161,7 @@ static inline uint16_t minimum(uint16_t a, uint16_t b);
 static inline void mqtt_buffer_write_data(const void *data, uint16_t length);
 static void mqtt_buffer_write_string(char const *data);
 static void mqtt_buffer_write_string_P(PGM_P data);
-static inline bool mqtt_buffer_free(uint16_t length);
+static inline uint16_t mqtt_buffer_free(void);
 static void mqtt_flush_buffer(void);
 static inline void mqtt_retransmit(void);
 static inline void mqtt_received_ack(void);
@@ -312,11 +312,11 @@ mqtt_buffer_write_string_P(PGM_P data)
 }
 
 // return whether the buffer has enough storage room for `length` bytes
-static inline bool
-mqtt_buffer_free(uint16_t length)
+static inline uint16_t
+mqtt_buffer_free(void)
 {
-  return mqtt_send_buffer_current_head + length + mqtt_receive_buffer_length
-    <= MQTT_SENDBUFFER_LENGTH;
+  return MQTT_SENDBUFFER_LENGTH -
+    mqtt_send_buffer_current_head - mqtt_receive_buffer_length;
 }
 
 // flush the send buffer (uip_send) if there is data
@@ -384,7 +384,7 @@ mqtt_buffer_write_length_field(uint8_t * buffer, uint16_t length)
 static bool
 mqtt_write_to_receive_buffer(const void *data, uint16_t length)
 {
-  if (!mqtt_buffer_free(length))
+  if (mqtt_buffer_free() < length)
     return false;
 
   // move receive buffer backward
@@ -426,7 +426,7 @@ mqtt_construct_connect_packet(void)
     length += strlen(mqtt_con_config->pass) + 2;
 
   // packet length + length field + header flags
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;               // this should not happen (first paket sent)
 
   // fixed header
@@ -509,7 +509,7 @@ mqtt_construct_publish_packet(char const *topic, const void *payload,
   if (qos > 0)
     length += 2;                // message id
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // header flags
@@ -550,7 +550,7 @@ mqtt_construct_publish_packet_P(PGM_P topic, const void *payload,
   if (qos > 0)
     length += 2;                // message id
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // header flags
@@ -588,7 +588,7 @@ mqtt_construct_subscribe_packet(char const *topic)
     + strlen(topic) + 2         // topic
     + 1;                        // qos
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // fixed header
@@ -618,7 +618,7 @@ mqtt_construct_subscribe_packet_P(PGM_P topic)
     + strlen_P(topic) + 2       // topic
     + 1;                        // qos
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // fixed header
@@ -648,7 +648,7 @@ mqtt_construct_unsubscribe_packet(char const *topic)
   uint16_t length = 2           // message id
     + strlen(topic) + 2;        // topic
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // fixed header
@@ -676,7 +676,7 @@ mqtt_construct_unsubscribe_packet_P(PGM_P topic)
   uint16_t length = 2           // message id
     + strlen_P(topic) + 2;      // topic
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // fixed header
@@ -706,7 +706,7 @@ mqtt_construct_unsubscribe_packet_P(PGM_P topic)
 bool
 mqtt_construct_zerolength_packet(uint8_t msg_type)
 {
-  if (!mqtt_buffer_free(2))
+  if (mqtt_buffer_free() < 2)
     return false;
 
   // fixed header
@@ -727,7 +727,7 @@ mqtt_construct_zerolength_packet(uint8_t msg_type)
 bool
 mqtt_construct_ack_packet(uint8_t msg_type, uint16_t msgid)
 {
-  if (!mqtt_buffer_free(4))
+  if (mqtt_buffer_free() < 4)
     return false;
 
   uint8_t header_flags = msg_type;

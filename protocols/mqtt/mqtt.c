@@ -92,6 +92,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <avr/pgmspace.h>
 
 #include "config.h"
@@ -128,6 +129,7 @@ static uint8_t mqtt_send_buffer_current_head;   // current buffer head
 static uint8_t mqtt_receive_buffer_length;      // length of data for received buffer
 static uint16_t mqtt_receive_packet_length;     // length of next expected
                                               //   (not fully received) packet
+static uint16_t mqtt_fmt_buffer_length;  // current buffer length for fmt functions
 
 // MQTT PROTOCOL STATE
 
@@ -239,6 +241,7 @@ mqtt_reset_state(void)
   mqtt_ping_outstanding = false;
   mqtt_last_in_activity = mqtt_last_out_activity = mqtt_timer_counter;
   STATE->stage = MQTT_STATE_DISCONNECTED;
+  mqtt_fmt_buffer_length = 0;
 }
 
 // the message id must not be 0
@@ -580,6 +583,87 @@ mqtt_construct_publish_packet_P(PGM_P topic, const void *payload,
   return true;
 }
 
+bool
+mqtt_construct_publish_packet_fmt_topic(bool retain, PGM_P fmt, ...)
+{
+  // maybe make this a parameter (at least qos=1 should already be operational)
+  const uint8_t qos = 0;
+
+  // reset state variable
+  mqtt_fmt_buffer_length = 0;
+
+  // check for space for header
+  // (1 header byte + fixed 2 byte length + 2 byte topic length)
+  uint16_t buffer_length = 1 + 2 + 2;
+  if (qos > 0)
+    buffer_length += 2; // message id
+  if (mqtt_buffer_free() < buffer_length)
+    return false;
+
+  // header flags
+  uint8_t head = mqtt_send_buffer_current_head;
+  uint8_t header = MQTTPUBLISH | qos << 1;
+  if (retain)
+    header |= 1 << 0;
+  mqtt_send_buffer[head++] = header;
+  head += 2; // set packet length later
+
+  // write topic
+  va_list va;
+  va_start(va, fmt);
+  int topic_length = vsnprintf_P((char *) &mqtt_send_buffer[head + 2],
+                               mqtt_buffer_free() - buffer_length, fmt, va);
+  va_end(va);
+
+  buffer_length += topic_length;
+  if (mqtt_buffer_free() < buffer_length)
+    return false;
+
+  mqtt_send_buffer[head++] = HI8(topic_length);
+  mqtt_send_buffer[head++] = LO8(topic_length);
+  head += topic_length;
+
+  // message id
+  if (qos > 0)
+  {
+    mqtt_send_buffer[head++] = HI8(mqtt_next_msg_id);
+    mqtt_send_buffer[head++] = LO8(mqtt_next_msg_id);
+    make_new_message_id();
+  }
+
+  mqtt_fmt_buffer_length = buffer_length;
+  return true;
+}
+
+bool
+mqtt_construct_publish_packet_fmt_payload(PGM_P fmt, ...)
+{
+  // check for valid state
+  uint16_t buffer_length = mqtt_fmt_buffer_length;
+  mqtt_fmt_buffer_length = 0;
+  if (buffer_length == 0)
+    return false;
+
+  // write payload
+  va_list va;
+  va_start(va, fmt);
+  buffer_length += vsnprintf_P((char *) &mqtt_send_buffer[
+                               mqtt_send_buffer_current_head + buffer_length],
+                               mqtt_buffer_free() - buffer_length, fmt, va);
+  va_end(va);
+
+  if (mqtt_buffer_free() < buffer_length)
+    return false;
+
+  // set length header
+  uint8_t length_pos = mqtt_send_buffer_current_head + 1;
+  mqtt_send_buffer_current_head += buffer_length;
+  buffer_length -= 3; // header length
+  mqtt_send_buffer[length_pos++] = (buffer_length & 0x7f) | 0x80;
+  mqtt_send_buffer[length_pos++] = (buffer_length >> 7) & 0x7f;
+
+  return true;
+}
 
 bool
 mqtt_construct_subscribe_packet(char const *topic)

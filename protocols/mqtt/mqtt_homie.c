@@ -42,6 +42,7 @@ static bool send_device_state(const char *state);
 
 static bool send_node_meta_str_P(PGM_P node_id, PGM_P attr, PGM_P value);
 static bool send_node_meta_str_ptr(PGM_P node_id, PGM_P attr, PGM_P const *value);
+static bool send_node_meta_props(PGM_P node_id, const mqtt_homie_property_t * const *props);
 static bool send_node_meta(const mqtt_homie_node_t *node);
 static bool send_nodes_meta(void);
 
@@ -236,6 +237,22 @@ send_node_meta_str_ptr(PGM_P node_id, PGM_P attr, PGM_P const *value)
 }
 
 static bool
+send_node_meta_props(PGM_P node_id, const mqtt_homie_property_t * const *props)
+{
+  const mqtt_homie_property_t *prop = (const mqtt_homie_property_t *) pgm_read_word(props);
+  bool first;
+  const char *prop_id;
+
+  mqtt_construct_publish_packet_header(1, true, fmt_S_S_S_S, str_homie, dev_id, node_id, PSTR("$properties"));
+  for (first = true; (prop_id = (const char *) pgm_read_word(&prop->id)) != NULL; first = false, prop++) {
+    mqtt_construct_publish_packet_payload(PSTR("%S%S"),
+      first ? str_empty : str_comma,
+      prop_id);
+  }
+  return mqtt_construct_publish_packet_fin();
+}
+
+static bool
 send_node_meta(const mqtt_homie_node_t *node)
 {
   PGM_P node_id = (PGM_P) pgm_read_word(&node->id);
@@ -257,6 +274,11 @@ send_node_meta(const mqtt_homie_node_t *node)
       node_field++;
 
     case 3:
+      if (!send_node_meta_props(node_id, &node->properties))
+        return false;
+      node_field++;
+
+    case 4:
       if (!call_callback_ptr(&node->array_callback))
         return false;
       node_field++;
@@ -387,7 +409,7 @@ send_props_meta(const mqtt_homie_node_t *node)
 {
   while(1)
   {
-    const mqtt_homie_property_t *props = (const mqtt_homie_property_t *) pgm_read_word(&node->properies);
+    const mqtt_homie_property_t *props = (const mqtt_homie_property_t *) pgm_read_word(&node->properties);
     const mqtt_homie_property_t *prop = &props[prop_pos];
     PGM_P prop_id = (PGM_P) pgm_read_word(&prop->id);
     if (prop_id == NULL)
@@ -406,7 +428,7 @@ call_node_output_callback(const mqtt_homie_node_t *node)
 {
   while(1)
   {
-    const mqtt_homie_property_t *props = (const mqtt_homie_property_t *) pgm_read_word(&node->properies);
+    const mqtt_homie_property_t *props = (const mqtt_homie_property_t *) pgm_read_word(&node->properties);
     const mqtt_homie_property_t *prop = &props[prop_pos];
     PGM_P prop_id = (PGM_P) pgm_read_word(&prop->id);
     if (prop_id == NULL)
@@ -543,7 +565,7 @@ publish_cb(char const *topic, uint16_t topic_length, const void *payload, uint16
 
     const mqtt_homie_property_t *prop;
     PGM_P prop_id;
-    for (prop = (const mqtt_homie_property_t *) pgm_read_word(&node->properies); (prop_id = (PGM_P) pgm_read_word(&prop->id)) != NULL; prop++)
+    for (prop = (const mqtt_homie_property_t *) pgm_read_word(&node->properties); (prop_id = (PGM_P) pgm_read_word(&prop->id)) != NULL; prop++)
     {
       if (match_topic(prop_in, topic_end, prop_id, true) == NULL)
         continue;

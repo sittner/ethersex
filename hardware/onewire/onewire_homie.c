@@ -57,7 +57,7 @@ const mqtt_homie_node_t ow_homie_node PROGMEM =
   .name = node_name,
   .init_callback = node_init_callback,
   .array_callback = node_array_callback,
-  .properies = properties
+  .properties = properties
 };
 
 static uint8_t sensor_index;

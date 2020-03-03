@@ -67,7 +67,7 @@ const mqtt_homie_node_t tanklevel_homie_node PROGMEM =
   .id = node_id,
   .name = node_name,
   .init_callback = node_init_callback,
-  .properies = properties
+  .properties = properties
 };
 
 static bool init_trig;

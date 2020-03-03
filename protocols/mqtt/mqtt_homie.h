@@ -61,7 +61,7 @@ typedef struct
   PGM_P type;
   mqtt_homie_output_callback_t init_callback;
   mqtt_homie_output_callback_t array_callback;
-  const mqtt_homie_property_t *properies;
+  const mqtt_homie_property_t *properties;
 } mqtt_homie_node_t;
 
 void mqtt_homie_init(void);

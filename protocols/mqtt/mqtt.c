@@ -595,11 +595,8 @@ mqtt_tmp_buffer_free(void)
 }
 
 bool
-mqtt_construct_publish_packet_header(bool retain, PGM_P fmt, ...)
+mqtt_construct_publish_packet_header(uint8_t qos, bool retain, PGM_P fmt, ...)
 {
-  // maybe make this a parameter (at least qos=1 should already be operational)
-  const uint8_t qos = 0;
-
   // check for space for header
   // (1 header byte + fixed 2 byte length + 2 byte topic length)
   mqtt_tmp_buffer_length = 1 + 2 + 2;

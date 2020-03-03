@@ -126,7 +126,7 @@ bool mqtt_construct_publish_packet(char const *topic, const void *payload,
                                    uint16_t payload_length, bool retain);
 bool mqtt_construct_publish_packet_P(PGM_P topic, const void *payload,
                                      uint16_t payload_length, bool retain);
-bool mqtt_construct_publish_packet_header(bool retain, PGM_P fmt, ...);
+bool mqtt_construct_publish_packet_header(uint8_t qos, bool retain, PGM_P fmt, ...);
 bool mqtt_construct_publish_packet_payload(PGM_P fmt, ...);
 bool mqtt_construct_publish_packet_fin();
 bool mqtt_construct_subscribe_packet(char const *topic);

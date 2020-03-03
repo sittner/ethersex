@@ -259,6 +259,10 @@ typedef struct
   /* power mode (parasite / external) */
   uint8_t power :1;
 #endif
+#ifdef ONEWIRE_HOMIE_SUPPORT
+  /* send flag for homie */
+  uint8_t homie :1;
+#endif
   /* this is set during discovery - all sensors with present == 0 will be
    * deleted after the discovery */
   uint8_t present :1;

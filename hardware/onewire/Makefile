@@ -7,6 +7,8 @@ $(ONEWIRE_SUPPORT)_ECMD_SRC += hardware/onewire/onewire_ecmd.c
 $(ONEWIRE_DS2450_SUPPORT)_SRC += hardware/onewire/ds2450.c
 $(ONEWIRE_DS2450_SUPPORT)_ECMD_SRC += hardware/onewire/ds2450_ecmd.c
 
+$(ONEWIRE_HOMIE_SUPPORT)_SRC += hardware/onewire/onewire_homie.c
+
 ##############################################################################
 # generic fluff
 include $(TOPDIR)/scripts/rules.mk

@@ -735,6 +735,9 @@ ow_discover_sensor(void)
       ow_sensors[i].temp.val = 0;
       ow_sensors[i].temp.twodigits = 0;
 #endif
+#ifdef ONEWIRE_HOMIE_SUPPORT
+      ow_sensors[i].homie = 0;
+#endif
     }
   }
   return 0;
@@ -818,6 +821,10 @@ ow_periodic(void)
 
         /* set a semaphore of if we had a conversion or communication error */
         ow_sensors[i].conv_error = tempis85;
+
+#ifdef ONEWIRE_HOMIE_SUPPORT
+      ow_sensors[i].homie = 1;
+#endif
 
   #ifdef ONEWIRE_HOOK_SUPPORT
         hook_ow_poll_call(&ow_sensors[i], OW_READY);

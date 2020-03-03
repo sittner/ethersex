@@ -8,6 +8,7 @@ dep_bool_menu "Tank level meter" TANKLEVEL_SUPPORT $CLOCK_SUPPORT $ADC_VOLTAGE_S
 		dep_bool "Lock input is active low" TANKLEVEL_LOCK_ACTIVE_LOW $TANKLEVEL_LOCK_SUPPORT
 	fi
 	dep_bool "Inline tank level" TANKLEVEL_INLINE_SUPPORT $TANKLEVEL_SUPPORT $VFS_INLINE_SUPPORT
+	dep_bool "Tank level MQTT Homie support" TANKLEVEL_HOMIE_SUPPORT $TANKLEVEL_SUPPORT $MQTT_HOMIE_SUPPORT
 	int "Default zero offset of the pressure sensor (in mV)" TANKLEVEL_SENSOR_OFFSET 0
 	int "Default medium density (in g/ltr)" TANKLEVEL_MED_DENSITY 840
 	int "Default ltr per meter tank level" TANKLEVEL_LTR_PER_M 3409

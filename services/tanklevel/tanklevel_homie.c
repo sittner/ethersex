@@ -34,12 +34,9 @@ static const char trig_id[] PROGMEM = "trigger";
 static const char trig_name[] PROGMEM = "Start measurement trigger";
 
 static bool node_init_callback(void);
-static bool level_format_callback(void);
-static bool level_output_callback(void);
-static void trig_input_callback(char const *topic, uint16_t topic_length,
-                                 void const *payload,
-                                 uint16_t payload_length,
-                                 bool retained);
+static bool level_format_callback(int8_t array_idx);
+static bool level_output_callback(int8_t array_idx);
+static void trig_input_callback(int8_t array_idx, const char *payload, uint16_t payload_length, bool retained);
 
 static const mqtt_homie_property_t properties[] PROGMEM =
 {
@@ -80,21 +77,19 @@ node_init_callback(void)
 }
 
 static bool
-level_format_callback(void)
+level_format_callback(int8_t array_idx)
 {
-  mqtt_homie_header_prop_format(node_id, level_id);
-  mqtt_construct_publish_packet_payload(PSTR("0:%u"), tanklevel_params_ram.ltr_full);
-  return mqtt_construct_publish_packet_fin();
+  return mqtt_construct_publish_packet_payload(PSTR("0:%u"), tanklevel_params_ram.ltr_full);
 }
 
 static bool
-level_output_callback(void)
+level_output_callback(int8_t array_idx)
 {
   // only send if new data available
   if (!tanklevel_homie_valid)
     return true;
 
-  mqtt_homie_header_prop_value(node_id, level_id, true);
+  mqtt_homie_header_prop_value(node_id, level_id, HOMIE_ARRAY_FLAG_NOARR, true);
   mqtt_construct_publish_packet_payload(PSTR("%u"), tanklevel_get());
   if (!mqtt_construct_publish_packet_fin())
     return false;
@@ -103,10 +98,7 @@ level_output_callback(void)
   return true;
 }
 
-static void trig_input_callback(char const *topic, uint16_t topic_length,
-                                 void const *payload,
-                                 uint16_t payload_length,
-                                 bool retained)
+static void trig_input_callback(int8_t array_idx, const char *payload, uint16_t payload_length, bool retained)
 {
   if (strncmp_P(payload, mqtt_homie_bool(true), payload_length) == 0)
   {

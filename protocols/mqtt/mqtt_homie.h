@@ -29,7 +29,13 @@
 #include <stdbool.h>
 #include <avr/pgmspace.h>
 
-typedef bool (*mqtt_homie_output_callback_t) (void);
+typedef bool (*mqtt_homie_bool_void_callback_t) (void);
+typedef int8_t (*mqtt_homie_s8_void_callback_t) (void);
+typedef bool (*mqtt_homie_bool_s8_callback_t) (int8_t);
+typedef void (*input_callback_t) (int8_t array_idx, const char *payload, uint16_t payload_length, bool retained);
+
+#define HOMIE_ARRAY_FLAG_NOARR -1
+#define HOMIE_ARRAY_FLAG_INIT  -2
 
 typedef enum
 {
@@ -44,14 +50,16 @@ typedef enum
 typedef struct
 {
   PGM_P id;
+  mqtt_homie_s8_void_callback_t array_count_callback;
   PGM_P name;
+  mqtt_homie_bool_s8_callback_t name_callback;
   uint8_t settable;
   PGM_P unit;
   uint8_t datatype;
   PGM_P format;
-  mqtt_homie_output_callback_t format_callback;
-  mqtt_homie_output_callback_t output_callback;
-  publish_callback input_callback;
+  mqtt_homie_bool_s8_callback_t format_callback;
+  mqtt_homie_bool_s8_callback_t output_callback;
+  input_callback_t input_callback;
 } mqtt_homie_property_t;
 
 typedef struct
@@ -59,20 +67,14 @@ typedef struct
   PGM_P id;
   PGM_P name;
   PGM_P type;
-  mqtt_homie_output_callback_t init_callback;
-  mqtt_homie_output_callback_t array_callback;
+  mqtt_homie_bool_void_callback_t init_callback;
   const mqtt_homie_property_t *properties;
 } mqtt_homie_node_t;
 
 void mqtt_homie_init(void);
 void mqtt_homie_periodic(void);
 
-bool mqtt_homie_header_array_node_name(PGM_P node_id, uint8_t node_index);
-bool mqtt_homie_header_array_range(PGM_P node_id);
-bool mqtt_homie_header_array_prop_value(PGM_P node_id, uint8_t node_index, PGM_P prop_id, bool retain);
-
-bool mqtt_homie_header_prop_format(PGM_P node_id, PGM_P prop_id);
-bool mqtt_homie_header_prop_value(PGM_P node_id, PGM_P prop_id, bool retain);
+bool mqtt_homie_header_prop_value(PGM_P node_id, PGM_P prop_id, int8_t array_idx, bool retain);
 
 PGM_P mqtt_homie_bool(bool value);
 

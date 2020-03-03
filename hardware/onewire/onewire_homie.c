@@ -28,20 +28,21 @@
 static const char node_id[] PROGMEM = "ow";
 static const char node_name[] PROGMEM = "OneWire Sensors";
 
-static const char prop_id[] PROGMEM = "temperature";
-static const char prop_name[] PROGMEM = "Temperature";
+static const char prop_id[] PROGMEM = "temp";
 static const char prop_unit[] PROGMEM = "°C";
 static const char prop_format[] PROGMEM = "-55.0:125.0";
 
 static bool node_init_callback(void);
-static bool node_array_callback(void);
-static bool prop_output_callback(void);
+static int8_t prop_array_count_callback(void);
+static bool prop_name_callback(int8_t array_idx);
+static bool prop_output_callback(int8_t array_idx);
 
 static const mqtt_homie_property_t properties[] PROGMEM =
 {
   {
     .id = prop_id,
-    .name = prop_name,
+    .array_count_callback = prop_array_count_callback,
+    .name_callback = prop_name_callback,
     .unit = prop_unit,
     .datatype = HOMIE_DATATYPE_FLOAT,
     .format = prop_format,
@@ -56,75 +57,63 @@ const mqtt_homie_node_t ow_homie_node PROGMEM =
   .id = node_id,
   .name = node_name,
   .init_callback = node_init_callback,
-  .array_callback = node_array_callback,
   .properties = properties
 };
 
-static uint8_t sensor_index;
+static int8_t array_count;
 static uint8_t sensor_map[OW_SENSORS_COUNT];
-
-static uint8_t node_count;
-static uint8_t node_index;
 
 static bool
 node_init_callback(void)
 {
-  sensor_index = 0;
-  node_count = 0;
-  node_index = 0;
-
+  array_count = -1;
   return true;
 }
 
-static bool
-node_array_callback(void)
+static int8_t
+prop_array_count_callback(void)
 {
-  for (; sensor_index < OW_SENSORS_COUNT; sensor_index++)
+  if (array_count >= 0)
+    return array_count;
+
+  uint8_t i;
+  for (array_count = 0, i = 0; i < OW_SENSORS_COUNT; i++)
   {
-    if (!ow_sensors[sensor_index].named)
-      continue;
-
-    mqtt_homie_header_array_node_name(node_id, node_count);
-    mqtt_construct_publish_packet_payload(PSTR("%s"), ow_sensors[sensor_index].name);
-    if (!mqtt_construct_publish_packet_fin())
-      return false;
-
-    sensor_map[node_count] = sensor_index;
-    node_count++;
+    if (ow_sensors[i].named)
+      sensor_map[array_count++] = i;
   }
 
-  mqtt_homie_header_array_range(node_id);
-  mqtt_construct_publish_packet_payload(PSTR("0-%d"), node_count);
-  return mqtt_construct_publish_packet_fin();
+  return array_count;
 }
 
 static bool
-prop_output_callback(void)
+prop_name_callback(int8_t array_idx)
 {
-  ow_sensor_t *sensor;
+  ow_sensor_t *sensor = &ow_sensors[sensor_map[array_idx]];
+  return mqtt_construct_publish_packet_payload(PSTR("%s"), sensor->name);
+}
 
-  for (; node_index < node_count; node_index++)
+static bool
+prop_output_callback(int8_t array_idx)
+{
+  ow_sensor_t *sensor = &ow_sensors[sensor_map[array_idx]];
+
+  if (!sensor->homie)
+    return true;
+
+  mqtt_homie_header_prop_value(node_id, prop_id, array_idx, true);
+
+  if (sensor->temp.twodigits)
   {
-    sensor = &ow_sensors[sensor_map[node_index]];
-
-    // only send if new data available
-    if (!sensor->homie)
-      continue;
-
-    mqtt_homie_header_array_prop_value(node_id, node_index, prop_id, true);
-    if (sensor->temp.twodigits)
-    {
-      mqtt_construct_publish_packet_payload(PSTR("%d.%02d"), sensor->temp.val / 100, abs(sensor->temp.val % 100));
-    } else {
-      mqtt_construct_publish_packet_payload(PSTR("%d.%01d"), sensor->temp.val / 10, abs(sensor->temp.val % 10));
-    }
-    if (!mqtt_construct_publish_packet_fin())
-      return false;
-
-    sensor->homie = 0;
+    mqtt_construct_publish_packet_payload(PSTR("%d.%02d"), sensor->temp.val / 100, abs(sensor->temp.val % 100));
+  } else {
+    mqtt_construct_publish_packet_payload(PSTR("%d.%01d"), sensor->temp.val / 10, abs(sensor->temp.val % 10));
   }
 
-  node_index = 0;
+  if (!mqtt_construct_publish_packet_fin())
+    return false;
+
+  sensor->homie = 0;
   return true;
 }
 

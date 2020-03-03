@@ -31,8 +31,6 @@ typedef enum
 
 void mqtt_homie_init(void);
 
-static bool call_callback_ptr(mqtt_homie_output_callback_t const *value);
-
 static bool send_device_meta_str_P(PGM_P attr, PGM_P value);
 static bool send_device_meta_localip(void);
 static bool send_device_meta_mac(void);
@@ -46,19 +44,25 @@ static bool send_node_meta_props(PGM_P node_id, const mqtt_homie_property_t * co
 static bool send_node_meta(const mqtt_homie_node_t *node);
 static bool send_nodes_meta(void);
 
-static bool send_prop_meta_str_P(PGM_P node_id, PGM_P prop_id, PGM_P attr, PGM_P value);
-static bool send_prop_meta_str_ptr(PGM_P node_id, PGM_P prop_id, PGM_P attr, PGM_P const *value);
-static bool send_prop_meta_bool(PGM_P node_id, PGM_P prop_id, PGM_P attr, uint8_t const *value);
-static bool send_prop_meta_datatype(PGM_P node_id, PGM_P prop_id, PGM_P attr, uint8_t const *value);
-static bool send_prop_meta(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop);
+static int8_t get_prop_array_count(const mqtt_homie_property_t *prop);
+static bool header_prop_attr(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr);
+
+static bool send_prop_meta_str_P(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, PGM_P value);
+static bool send_prop_meta_str_ptr(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, PGM_P const *value);
+static bool send_prop_meta_bool(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, uint8_t const *value);
+static bool send_prop_meta_datatype(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, uint8_t const *value);
+static bool send_prop_meta_array(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop);
+static bool send_prop_meta(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop, int8_t array_idx);
 static bool send_props_meta(const mqtt_homie_node_t *node);
 
+static bool call_prop_output_callback(const mqtt_homie_property_t *prop, int8_t array_idx);
+static bool call_prop_output_callback_array(const mqtt_homie_property_t *prop);
 static bool call_node_output_callback(const mqtt_homie_node_t *node);
 static bool call_nodes_output_callback(void);
 
 static void set_state(mqtt_homie_state_t new_state);
 
-static const char *match_topic(const char *data, const char *end, PGM_P prefix, bool last);
+static const char *match_topic(const char *data, const char *end, PGM_P prefix, char sep);
 
 static void connack_cb(void);
 static void poll_cb(void);
@@ -82,7 +86,8 @@ static const char dev_id[] PROGMEM = MQTT_HOMIE_CONF_DEV_ID;
 static const char fmt_S_S_S[] PROGMEM = "%S/%S/%S";
 static const char fmt_S_S_S_S[] PROGMEM = "%S/%S/%S/%S";
 static const char fmt_S_S_S_S_S[] PROGMEM = "%S/%S/%S/%S/%S";
-static const char fmt_S_S_S_d_S[] PROGMEM = "%S/%S/%S_%d/%S";
+static const char fmt_S_S_S_S_d_S[] PROGMEM = "%S/%S/%S/%S_%d/%S";
+static const char fmt_S_S_S_S_d[] PROGMEM = "%S/%S/%S/%S_%d";
 
 static const mqtt_homie_node_t * const nodes[] PROGMEM =
 {
@@ -97,19 +102,12 @@ static const mqtt_homie_node_t * const nodes[] PROGMEM =
 
 static mqtt_homie_state_t state;
 static uint8_t dev_field;
-static uint8_t node_pos;
+static uint8_t node_idx;
 static uint8_t node_field;
-static uint8_t prop_pos;
+static uint8_t prop_idx;
 static uint8_t prop_field;
-
-static bool
-call_callback_ptr(mqtt_homie_output_callback_t const *value)
-{
-  mqtt_homie_output_callback_t cb = (mqtt_homie_output_callback_t) pgm_read_word(value);
-  if (cb == NULL)
-    return true;
-  return cb();
-}
+static int8_t prop_array_count;
+static int8_t prop_array_idx;
 
 static bool
 send_device_meta_str_P(PGM_P attr, PGM_P value)
@@ -159,17 +157,13 @@ send_device_meta_nodes(void)
   const mqtt_homie_node_t * const *np;
   const mqtt_homie_node_t *n;
   const char *node_id;
-  mqtt_homie_output_callback_t array_callback;
 
   mqtt_construct_publish_packet_header(1, true, fmt_S_S_S, str_homie, dev_id, PSTR("$nodes"));
-  for (first = true, np = nodes; (n = (const mqtt_homie_node_t *) pgm_read_word(np)) != NULL; first = false, np++) {
+  for (first = true, np = nodes; (n = (const mqtt_homie_node_t *) pgm_read_word(np)) != NULL; np++) {
     node_id = (const char *) pgm_read_word(&n->id);
-    array_callback = (mqtt_homie_output_callback_t) pgm_read_word(&n->array_callback);
-
-    mqtt_construct_publish_packet_payload(PSTR("%S%S%S"),
-      first ? str_empty : str_comma,
-      node_id,
-      array_callback != NULL ? str_array : str_empty);
+    mqtt_construct_publish_packet_payload(PSTR("%S%S"),
+      first ? str_empty : str_comma, node_id);
+    first = false;
   }
   return mqtt_construct_publish_packet_fin();
 }
@@ -242,12 +236,24 @@ send_node_meta_props(PGM_P node_id, const mqtt_homie_property_t * const *props)
   const mqtt_homie_property_t *prop = (const mqtt_homie_property_t *) pgm_read_word(props);
   bool first;
   const char *prop_id;
+  int8_t i, array_count;
 
   mqtt_construct_publish_packet_header(1, true, fmt_S_S_S_S, str_homie, dev_id, node_id, PSTR("$properties"));
-  for (first = true; (prop_id = (const char *) pgm_read_word(&prop->id)) != NULL; first = false, prop++) {
-    mqtt_construct_publish_packet_payload(PSTR("%S%S"),
-      first ? str_empty : str_comma,
-      prop_id);
+  for (first = true; (prop_id = (const char *) pgm_read_word(&prop->id)) != NULL; prop++) {
+    array_count = get_prop_array_count(prop);
+    if (array_count < 0)
+    {
+      mqtt_construct_publish_packet_payload(PSTR("%S%S"),
+        first ? str_empty : str_comma, prop_id);
+      first = false;
+    } else {
+      for (i = 0; i < array_count; i++)
+      {
+        mqtt_construct_publish_packet_payload(PSTR("%S%S_%d"),
+          first ? str_empty : str_comma, prop_id, i);
+        first = false;
+      }
+    }
   }
   return mqtt_construct_publish_packet_fin();
 }
@@ -256,11 +262,16 @@ static bool
 send_node_meta(const mqtt_homie_node_t *node)
 {
   PGM_P node_id = (PGM_P) pgm_read_word(&node->id);
+  mqtt_homie_bool_void_callback_t init_cb;
   switch (node_field)
   {
     case 0:
-      if (!call_callback_ptr(&node->init_callback))
-        return false;
+      init_cb = (mqtt_homie_bool_void_callback_t) pgm_read_word(&node->init_callback);
+      if (init_cb != NULL)
+      {
+        if (!init_cb())
+          return false;
+      }
       node_field++;
 
     case 1:
@@ -277,11 +288,6 @@ send_node_meta(const mqtt_homie_node_t *node)
       if (!send_node_meta_props(node_id, &node->properties))
         return false;
       node_field++;
-
-    case 4:
-      if (!call_callback_ptr(&node->array_callback))
-        return false;
-      node_field++;
   }
 
   return true;
@@ -292,7 +298,7 @@ send_nodes_meta(void)
 {
   while(1)
   {
-    const mqtt_homie_node_t *node = (const mqtt_homie_node_t *) pgm_read_word(&nodes[node_pos]);
+    const mqtt_homie_node_t *node = (const mqtt_homie_node_t *) pgm_read_word(&nodes[node_idx]);
     if (node == NULL)
       return true;
 
@@ -302,39 +308,59 @@ send_nodes_meta(void)
     if (!send_props_meta(node))
       return false;
 
-    node_pos++;
+    node_idx++;
     node_field = 0;
-    prop_pos = 0;
+    prop_idx = 0;
     prop_field = 0;
   }
 }
 
-static bool
-send_prop_meta_str_P(PGM_P node_id, PGM_P prop_id, PGM_P attr, PGM_P value)
+static int8_t
+get_prop_array_count(const mqtt_homie_property_t *prop)
 {
-  mqtt_construct_publish_packet_header(1, true, fmt_S_S_S_S_S, str_homie, dev_id, node_id, prop_id, attr);
+  mqtt_homie_s8_void_callback_t callback = (mqtt_homie_s8_void_callback_t) pgm_read_word(&prop->array_count_callback);
+  if (callback == NULL)
+    return HOMIE_ARRAY_FLAG_NOARR;
+  return callback();
+}
+
+static bool
+header_prop_attr(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr)
+{
+  if (array_idx >= 0)
+  {
+    return mqtt_construct_publish_packet_header(1, true, fmt_S_S_S_S_d_S, str_homie, dev_id, node_id, prop_id, array_idx, attr);
+  } else {
+    return mqtt_construct_publish_packet_header(1, true, fmt_S_S_S_S_S, str_homie, dev_id, node_id, prop_id, attr);
+  }
+}
+
+static bool
+send_prop_meta_str_P(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, PGM_P value)
+{
+  header_prop_attr(node_id, prop_id, array_idx, attr);
   mqtt_construct_publish_packet_payload(PSTR("%S"), value);
   return mqtt_construct_publish_packet_fin();
 }
 
 static bool
-send_prop_meta_str_ptr(PGM_P node_id, PGM_P prop_id, PGM_P attr, PGM_P const *value)
+send_prop_meta_str_ptr(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, PGM_P const *value)
 {
   PGM_P s = (PGM_P) pgm_read_word(value);
   if (s == NULL)
     return true;
-  return send_prop_meta_str_P(node_id, prop_id, attr, s);
+  return send_prop_meta_str_P(node_id, prop_id, array_idx, attr, s);
 }
 
 static bool
-send_prop_meta_bool(PGM_P node_id, PGM_P prop_id, PGM_P attr, uint8_t const *value)
+send_prop_meta_bool(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, uint8_t const *value)
 {
   bool b = (bool) pgm_read_byte(value);
-  return send_prop_meta_str_P(node_id, prop_id, attr, mqtt_homie_bool(b));
+  return send_prop_meta_str_P(node_id, prop_id, array_idx, attr, mqtt_homie_bool(b));
 }
 
 static bool
-send_prop_meta_datatype(PGM_P node_id, PGM_P prop_id, PGM_P attr, uint8_t const *value)
+send_prop_meta_datatype(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, uint8_t const *value)
 {
   mqtt_homie_datatype_t dt = (mqtt_homie_datatype_t) pgm_read_byte(value);
   PGM_P s;
@@ -359,43 +385,53 @@ send_prop_meta_datatype(PGM_P node_id, PGM_P prop_id, PGM_P attr, uint8_t const 
       s = PSTR("color");
       break;
   }
-  return send_prop_meta_str_P(node_id, prop_id, attr, s);
+  return send_prop_meta_str_P(node_id, prop_id, array_idx, attr, s);
 }
 
 static bool
-send_prop_meta(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop)
+send_prop_meta_cb_fixed(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, mqtt_homie_bool_s8_callback_t const *cb, PGM_P const *fixed)
+{
+  mqtt_homie_bool_s8_callback_t callback = (mqtt_homie_bool_s8_callback_t) pgm_read_word(cb);
+  if (callback != NULL)
+  {
+    header_prop_attr(node_id, prop_id, array_idx, attr);
+    callback(array_idx);
+    return mqtt_construct_publish_packet_fin();
+  }
+
+  return send_prop_meta_str_ptr(node_id, prop_id, array_idx, attr, fixed);
+}
+
+static bool
+send_prop_meta(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop, int8_t array_idx)
 {
   PGM_P node_id = (PGM_P) pgm_read_word(&node->id);
   PGM_P prop_id = (PGM_P) pgm_read_word(&prop->id);
+
   switch (prop_field)
   {
     case 0:
-      if (!send_prop_meta_str_ptr(node_id, prop_id, PSTR("$name"), &prop->name))
+      if (!send_prop_meta_cb_fixed(node_id, prop_id, array_idx, PSTR("$name"), &prop->name_callback, &prop->name))
         return false;
       prop_field++;
 
     case 1:
-      if (!send_prop_meta_bool(node_id, prop_id, PSTR("$settable"), &prop->settable))
+      if (!send_prop_meta_bool(node_id, prop_id, array_idx, PSTR("$settable"), &prop->settable))
         return false;
       prop_field++;
 
     case 2:
-      if (!send_prop_meta_str_ptr(node_id, prop_id, PSTR("$unit"), &prop->unit))
+      if (!send_prop_meta_str_ptr(node_id, prop_id, array_idx, PSTR("$unit"), &prop->unit))
         return false;
       prop_field++;
 
     case 3:
-      if (!send_prop_meta_datatype(node_id, prop_id, PSTR("$datatype"), &prop->datatype))
+      if (!send_prop_meta_datatype(node_id, prop_id, array_idx, PSTR("$datatype"), &prop->datatype))
         return false;
       prop_field++;
 
     case 4:
-      if (!send_prop_meta_str_ptr(node_id, prop_id, PSTR("$format"), &prop->format))
-        return false;
-      prop_field++;
-
-    case 5:
-      if (!call_callback_ptr(&prop->format_callback))
+      if (!send_prop_meta_cb_fixed(node_id, prop_id, array_idx, PSTR("$format"), &prop->format_callback, &prop->format))
         return false;
       prop_field++;
   }
@@ -405,23 +441,78 @@ send_prop_meta(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop)
 }
 
 static bool
+send_prop_meta_array(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop)
+{
+  while (prop_array_idx < prop_array_count)
+  {
+    if (!send_prop_meta(node, prop, prop_array_idx))
+      return false;
+
+    prop_array_idx++;
+    prop_field = 0;
+  }
+
+  return true;
+}
+
+static bool
 send_props_meta(const mqtt_homie_node_t *node)
 {
   while(1)
   {
     const mqtt_homie_property_t *props = (const mqtt_homie_property_t *) pgm_read_word(&node->properties);
-    const mqtt_homie_property_t *prop = &props[prop_pos];
+    const mqtt_homie_property_t *prop = &props[prop_idx];
     PGM_P prop_id = (PGM_P) pgm_read_word(&prop->id);
     if (prop_id == NULL)
       return true;
 
-    if (!send_prop_meta(node, prop))
-      return false;
+    if (prop_array_count == HOMIE_ARRAY_FLAG_INIT)
+      prop_array_count = get_prop_array_count(prop);
 
-    prop_pos++;
+    if (prop_array_count >= 0)
+    {
+      if (!send_prop_meta_array(node, prop))
+        return false;
+    } else {
+      if (!send_prop_meta(node, prop, HOMIE_ARRAY_FLAG_NOARR))
+        return false;
+    }
+
+    prop_idx++;
     prop_field = 0;
+    prop_array_count = HOMIE_ARRAY_FLAG_INIT;
+    prop_array_idx = 0;
   }
 }
+
+static bool
+call_prop_output_callback(const mqtt_homie_property_t *prop, int8_t array_idx)
+{
+    mqtt_homie_bool_s8_callback_t callback = (mqtt_homie_bool_s8_callback_t) pgm_read_word(&prop->output_callback);
+    if (callback != NULL)
+    {
+      if (!callback(array_idx))
+        return false;
+    }
+
+    return true;
+}
+
+static bool
+call_prop_output_callback_array(const mqtt_homie_property_t *prop)
+{
+  while (prop_array_idx < prop_array_count)
+  {
+    if (!call_prop_output_callback(prop, prop_array_idx))
+      return false;
+
+    prop_array_idx++;
+    prop_field = 0;
+  }
+
+  return true;
+}
+
 
 static bool
 call_node_output_callback(const mqtt_homie_node_t *node)
@@ -429,15 +520,27 @@ call_node_output_callback(const mqtt_homie_node_t *node)
   while(1)
   {
     const mqtt_homie_property_t *props = (const mqtt_homie_property_t *) pgm_read_word(&node->properties);
-    const mqtt_homie_property_t *prop = &props[prop_pos];
+    const mqtt_homie_property_t *prop = &props[prop_idx];
+
     PGM_P prop_id = (PGM_P) pgm_read_word(&prop->id);
     if (prop_id == NULL)
       return true;
 
-    if (!call_callback_ptr(&prop->output_callback))
-      return false;
+    if (prop_array_count == HOMIE_ARRAY_FLAG_INIT)
+      prop_array_count = get_prop_array_count(prop);
 
-    prop_pos++;
+    if (prop_array_count >= 0)
+    {
+      if (!call_prop_output_callback_array(prop))
+        return false;
+    } else {
+      if (!call_prop_output_callback(prop, HOMIE_ARRAY_FLAG_NOARR))
+        return false;
+    }
+
+    prop_idx++;
+    prop_array_count = HOMIE_ARRAY_FLAG_INIT;
+    prop_array_idx = 0;
   }
 }
 
@@ -446,15 +549,15 @@ call_nodes_output_callback(void)
 {
   while(1)
   {
-    const mqtt_homie_node_t *node = (const mqtt_homie_node_t *) pgm_read_word(&nodes[node_pos]);
+    const mqtt_homie_node_t *node = (const mqtt_homie_node_t *) pgm_read_word(&nodes[node_idx]);
     if (node == NULL)
       return true;
 
     if (!call_node_output_callback(node))
       return false;
 
-    node_pos++;
-    prop_pos = 0;
+    node_idx++;
+    prop_idx = 0;
   }
 }
 
@@ -463,10 +566,12 @@ set_state(mqtt_homie_state_t new_state)
 {
   state = new_state;
   dev_field = 0;
-  node_pos = 0;
+  node_idx = 0;
   node_field = 0;
-  prop_pos = 0;
+  prop_idx = 0;
   prop_field = 0;
+  prop_array_count = HOMIE_ARRAY_FLAG_INIT;
+  prop_array_idx = 0;
 }
 
 void
@@ -519,7 +624,7 @@ close_cb(void)
 }
 
 static const char *
-match_topic(const char *data, const char *end, PGM_P prefix, bool last)
+match_topic(const char *data, const char *end, PGM_P prefix, char sep)
 {
   char c;
   for(; (c = (char) pgm_read_byte(prefix)) != 0; prefix++)
@@ -529,12 +634,12 @@ match_topic(const char *data, const char *end, PGM_P prefix, bool last)
     data++;
   }
 
-  if (last)
+  if (sep == 0)
   {
     if (data < end)
       return NULL;
   } else {
-    if (data >= end || *data != '/')
+    if (data >= end || *data != sep)
       return NULL;
     data++;
   }
@@ -546,10 +651,10 @@ static void
 publish_cb(char const *topic, uint16_t topic_length, const void *payload, uint16_t payload_length, bool retained)
 {
   char const *topic_end = topic + topic_length;
-  const char *node_in = match_topic(topic, topic_end, str_homie, false);
+  const char *node_in = match_topic(topic, topic_end, str_homie, '/');
   if (node_in == NULL)
     return;
-  node_in = match_topic(node_in, topic_end, dev_id, false);
+  node_in = match_topic(node_in, topic_end, dev_id, '/');
   if (node_in == NULL)
     return;
 
@@ -559,7 +664,7 @@ publish_cb(char const *topic, uint16_t topic_length, const void *payload, uint16
   {
     PGM_P node_id = (PGM_P) pgm_read_word(&node->id);
 
-    const char *prop_in = match_topic(node_in, topic_end, node_id, false);
+    const char *prop_in = match_topic(node_in, topic_end, node_id, '/');
     if (prop_in == NULL)
       continue;
 
@@ -567,44 +672,38 @@ publish_cb(char const *topic, uint16_t topic_length, const void *payload, uint16
     PGM_P prop_id;
     for (prop = (const mqtt_homie_property_t *) pgm_read_word(&node->properties); (prop_id = (PGM_P) pgm_read_word(&prop->id)) != NULL; prop++)
     {
-      if (match_topic(prop_in, topic_end, prop_id, true) == NULL)
-        continue;
+      int8_t array_count = get_prop_array_count(prop);
+      int8_t array_idx;
+      if (array_count >= 0)
+      {
+        const char *array_idx_in = match_topic(prop_in, topic_end, prop_id, '_');
+        if (array_idx_in == NULL)
+          continue;
+        array_idx = atoi(array_idx_in);
+        if (array_idx < 0 || array_idx >= array_count)
+          continue;
+      } else {
+        if (match_topic(prop_in, topic_end, prop_id, 0) == NULL)
+          continue;
+        array_idx = HOMIE_ARRAY_FLAG_NOARR;
+      }
 
-      publish_callback cb = (publish_callback) pgm_read_word(&prop->input_callback);
+      input_callback_t cb = (input_callback_t) pgm_read_word(&prop->input_callback);
       if (cb != NULL)
-        cb(topic, topic_length, payload, payload_length, retained);
+        cb(array_idx, (const char *) payload, payload_length, retained);
     }
   }
 }
 
 bool
-mqtt_homie_header_array_node_name(PGM_P node_id, uint8_t node_index)
+mqtt_homie_header_prop_value(PGM_P node_id, PGM_P prop_id, int8_t array_idx, bool retain)
 {
-  return mqtt_construct_publish_packet_header(1, true, fmt_S_S_S_d_S, str_homie, dev_id, node_id, node_index, PSTR("$name"));
-}
-
-bool
-mqtt_homie_header_array_range(PGM_P node_id)
-{
-  return mqtt_construct_publish_packet_header(1, true, fmt_S_S_S_S, str_homie, dev_id, node_id, PSTR("$array"));
-}
-
-bool
-mqtt_homie_header_array_prop_value(PGM_P node_id, uint8_t node_index, PGM_P prop_id, bool retain)
-{
-  return mqtt_construct_publish_packet_header(1, retain, fmt_S_S_S_d_S, str_homie, dev_id, node_id, node_index, prop_id);
-}
-
-bool
-mqtt_homie_header_prop_format(PGM_P node_id, PGM_P prop_id)
-{
-  return mqtt_construct_publish_packet_header(1, true, fmt_S_S_S_S_S, str_homie, dev_id, node_id, prop_id, PSTR("$format"));
-}
-
-bool
-mqtt_homie_header_prop_value(PGM_P node_id, PGM_P prop_id, bool retain)
-{
-  return mqtt_construct_publish_packet_header(1, retain, fmt_S_S_S_S, str_homie, dev_id, node_id, prop_id);
+  if (array_idx >= 0)
+  {
+    return mqtt_construct_publish_packet_header(1, retain, fmt_S_S_S_S_d, str_homie, dev_id, node_id, prop_id, array_idx);
+  } else {
+    return mqtt_construct_publish_packet_header(1, retain, fmt_S_S_S_S, str_homie, dev_id, node_id, prop_id);
+  }
 }
 
 PGM_P

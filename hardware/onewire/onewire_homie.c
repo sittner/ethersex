@@ -98,7 +98,7 @@ prop_output_callback(int8_t array_idx)
 {
   ow_sensor_t *sensor = &ow_sensors[sensor_map[array_idx]];
 
-  if (!sensor->homie)
+  if (!sensor->homie_valid)
     return true;
 
   mqtt_homie_header_prop_value(node_id, prop_id, array_idx, true);
@@ -113,7 +113,7 @@ prop_output_callback(int8_t array_idx)
   if (!mqtt_construct_publish_packet_fin())
     return false;
 
-  sensor->homie = 0;
+  sensor->homie_valid = 0;
   return true;
 }
 

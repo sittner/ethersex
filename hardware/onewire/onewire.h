@@ -261,7 +261,7 @@ typedef struct
 #endif
 #ifdef ONEWIRE_HOMIE_SUPPORT
   /* send flag for homie */
-  uint8_t homie :1;
+  uint8_t homie_valid :1;
 #endif
   /* this is set during discovery - all sensors with present == 0 will be
    * deleted after the discovery */

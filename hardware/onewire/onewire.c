@@ -736,7 +736,7 @@ ow_discover_sensor(void)
       ow_sensors[i].temp.twodigits = 0;
 #endif
 #ifdef ONEWIRE_HOMIE_SUPPORT
-      ow_sensors[i].homie = 0;
+      ow_sensors[i].homie_valid = 0;
 #endif
     }
   }
@@ -823,7 +823,7 @@ ow_periodic(void)
         ow_sensors[i].conv_error = tempis85;
 
 #ifdef ONEWIRE_HOMIE_SUPPORT
-      ow_sensors[i].homie = 1;
+      ow_sensors[i].homie_valid = 1;
 #endif
 
   #ifdef ONEWIRE_HOOK_SUPPORT

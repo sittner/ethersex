@@ -23,6 +23,8 @@
 #ifndef _TANKLEVEL_H
 #define _TANKLEVEL_H
 
+#include <stdbool.h>
+
 #include "services/clock/clock.h"
 
 /* sensor sensitivity in mV/kPa */
@@ -41,6 +43,10 @@ typedef struct {
 } tanklevel_params_t;
 
 extern tanklevel_params_t tanklevel_params_ram;
+
+#ifdef TANKLEVEL_HOMIE_SUPPORT
+extern volatile bool tanklevel_homie_valid;
+#endif
 
 void tanklevel_init(void);
 void tanklevel_update_factor(void);

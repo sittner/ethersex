@@ -55,13 +55,17 @@ tanklevel_params_t tanklevel_params_ram;
 
 float tanklevel_factor;
 
-volatile uint8_t state = TANKLEVEL_STATE_IDLE;
-volatile uint8_t locked;
-volatile uint16_t capture_adc;
-volatile timestamp_t capture_ts;
-volatile uint16_t raise_timer;
-volatile uint16_t hold_timer;
-volatile timestamp_t get_ts;
+static volatile uint8_t state = TANKLEVEL_STATE_IDLE;
+static volatile uint8_t locked;
+static volatile uint16_t capture_adc;
+static volatile timestamp_t capture_ts;
+static volatile uint16_t raise_timer;
+static volatile uint16_t hold_timer;
+static volatile timestamp_t get_ts;
+
+#ifdef TANKLEVEL_HOMIE_SUPPORT
+volatile bool tanklevel_homie_valid = false;
+#endif
 
 void
 tanklevel_init(void)
@@ -136,6 +140,10 @@ tanklevel_periodic(void)
         capture_ts = clock_get_time();
         capture_adc = adc_get(TANKLEVEL_ADC_CHANNEL);
       }
+
+#ifdef TANKLEVEL_HOMIE_SUPPORT
+      tanklevel_homie_valid = true;
+#endif
 
     default:
       state = TANKLEVEL_STATE_IDLE;

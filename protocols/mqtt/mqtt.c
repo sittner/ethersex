@@ -92,6 +92,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <avr/pgmspace.h>
 
 #include "config.h"
@@ -128,6 +129,7 @@ static uint8_t mqtt_send_buffer_current_head;   // current buffer head
 static uint8_t mqtt_receive_buffer_length;      // length of data for received buffer
 static uint16_t mqtt_receive_packet_length;     // length of next expected
                                               //   (not fully received) packet
+static uint16_t mqtt_tmp_buffer_length;  // current buffer length for construct functions
 
 // MQTT PROTOCOL STATE
 
@@ -161,7 +163,8 @@ static inline uint16_t minimum(uint16_t a, uint16_t b);
 static inline void mqtt_buffer_write_data(const void *data, uint16_t length);
 static void mqtt_buffer_write_string(char const *data);
 static void mqtt_buffer_write_string_P(PGM_P data);
-static inline bool mqtt_buffer_free(uint16_t length);
+static inline uint16_t mqtt_buffer_free(void);
+static inline bool mqtt_tmp_buffer_free(void);
 static void mqtt_flush_buffer(void);
 static inline void mqtt_retransmit(void);
 static inline void mqtt_received_ack(void);
@@ -239,6 +242,7 @@ mqtt_reset_state(void)
   mqtt_ping_outstanding = false;
   mqtt_last_in_activity = mqtt_last_out_activity = mqtt_timer_counter;
   STATE->stage = MQTT_STATE_DISCONNECTED;
+  mqtt_tmp_buffer_length = 0;
 }
 
 // the message id must not be 0
@@ -312,11 +316,11 @@ mqtt_buffer_write_string_P(PGM_P data)
 }
 
 // return whether the buffer has enough storage room for `length` bytes
-static inline bool
-mqtt_buffer_free(uint16_t length)
+static inline uint16_t
+mqtt_buffer_free(void)
 {
-  return mqtt_send_buffer_current_head + length + mqtt_receive_buffer_length
-    <= MQTT_SENDBUFFER_LENGTH;
+  return MQTT_SENDBUFFER_LENGTH -
+    mqtt_send_buffer_current_head - mqtt_receive_buffer_length;
 }
 
 // flush the send buffer (uip_send) if there is data
@@ -366,8 +370,8 @@ mqtt_buffer_write_length_field(uint8_t * buffer, uint16_t length)
   uint8_t pos = 0;
   do
   {
-    digit = length % 128;
-    length = length / 128;
+    digit = length & 0x7f;
+    length >>= 7;
     if (length > 0)
     {
       digit |= 0x80;
@@ -384,7 +388,7 @@ mqtt_buffer_write_length_field(uint8_t * buffer, uint16_t length)
 static bool
 mqtt_write_to_receive_buffer(const void *data, uint16_t length)
 {
-  if (!mqtt_buffer_free(length))
+  if (mqtt_buffer_free() < length)
     return false;
 
   // move receive buffer backward
@@ -426,7 +430,7 @@ mqtt_construct_connect_packet(void)
     length += strlen(mqtt_con_config->pass) + 2;
 
   // packet length + length field + header flags
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;               // this should not happen (first paket sent)
 
   // fixed header
@@ -509,7 +513,7 @@ mqtt_construct_publish_packet(char const *topic, const void *payload,
   if (qos > 0)
     length += 2;                // message id
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // header flags
@@ -550,7 +554,7 @@ mqtt_construct_publish_packet_P(PGM_P topic, const void *payload,
   if (qos > 0)
     length += 2;                // message id
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // header flags
@@ -580,6 +584,96 @@ mqtt_construct_publish_packet_P(PGM_P topic, const void *payload,
   return true;
 }
 
+static inline bool
+mqtt_tmp_buffer_free(void)
+{
+  if (mqtt_buffer_free() >= mqtt_tmp_buffer_length)
+    return true;
+
+  mqtt_tmp_buffer_length = 0;
+  return false;
+}
+
+bool
+mqtt_construct_publish_packet_header(uint8_t qos, bool retain, PGM_P fmt, ...)
+{
+  // check for space for header
+  // (1 header byte + fixed 2 byte length + 2 byte topic length)
+  mqtt_tmp_buffer_length = 1 + 2 + 2;
+  if (qos > 0)
+    mqtt_tmp_buffer_length += 2; // message id
+  if (!mqtt_tmp_buffer_free())
+    return false;
+
+  // header flags
+  uint8_t head = mqtt_send_buffer_current_head;
+  uint8_t header = MQTTPUBLISH | qos << 1;
+  if (retain)
+    header |= 1 << 0;
+  mqtt_send_buffer[head++] = header;
+  head += 2; // set packet length in mqtt_construct_publish_packet_fin
+
+  // write topic
+  va_list va;
+  va_start(va, fmt);
+  int topic_length = vsnprintf_P((char *) &mqtt_send_buffer[head + 2],
+                       mqtt_buffer_free() - mqtt_tmp_buffer_length, fmt, va);
+  va_end(va);
+
+  mqtt_tmp_buffer_length += topic_length;
+  if (!mqtt_tmp_buffer_free())
+    return false;
+
+  mqtt_send_buffer[head++] = HI8(topic_length);
+  mqtt_send_buffer[head++] = LO8(topic_length);
+  head += topic_length;
+
+  // message id
+  if (qos > 0)
+  {
+    mqtt_send_buffer[head++] = HI8(mqtt_next_msg_id);
+    mqtt_send_buffer[head++] = LO8(mqtt_next_msg_id);
+    make_new_message_id();
+  }
+
+  return true;
+}
+
+bool
+mqtt_construct_publish_packet_payload(PGM_P fmt, ...)
+{
+  // check for valid state
+  if (mqtt_tmp_buffer_length == 0)
+    return false;
+
+  // write payload
+  va_list va;
+  va_start(va, fmt);
+  mqtt_tmp_buffer_length += vsnprintf_P((char *) &mqtt_send_buffer[
+                              mqtt_send_buffer_current_head + mqtt_tmp_buffer_length],
+                              mqtt_buffer_free() - mqtt_tmp_buffer_length, fmt, va);
+  va_end(va);
+
+  return mqtt_tmp_buffer_free();
+}
+
+bool
+mqtt_construct_publish_packet_fin()
+{
+  // check for valid state
+  if (mqtt_tmp_buffer_length == 0)
+    return false;
+
+  // set length header
+  uint8_t length_pos = mqtt_send_buffer_current_head + 1;
+  mqtt_send_buffer_current_head += mqtt_tmp_buffer_length;
+  mqtt_tmp_buffer_length -= 3; // header length
+  mqtt_send_buffer[length_pos++] = (mqtt_tmp_buffer_length & 0x7f) | 0x80;
+  mqtt_send_buffer[length_pos++] = (mqtt_tmp_buffer_length >> 7) & 0x7f;
+
+  mqtt_tmp_buffer_length = 0;
+  return true;
+}
 
 bool
 mqtt_construct_subscribe_packet(char const *topic)
@@ -588,7 +682,7 @@ mqtt_construct_subscribe_packet(char const *topic)
     + strlen(topic) + 2         // topic
     + 1;                        // qos
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // fixed header
@@ -618,7 +712,7 @@ mqtt_construct_subscribe_packet_P(PGM_P topic)
     + strlen_P(topic) + 2       // topic
     + 1;                        // qos
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // fixed header
@@ -648,7 +742,7 @@ mqtt_construct_unsubscribe_packet(char const *topic)
   uint16_t length = 2           // message id
     + strlen(topic) + 2;        // topic
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // fixed header
@@ -676,7 +770,7 @@ mqtt_construct_unsubscribe_packet_P(PGM_P topic)
   uint16_t length = 2           // message id
     + strlen_P(topic) + 2;      // topic
 
-  if (!mqtt_buffer_free(length + MQTT_LF_LENGTH(length) + 1))
+  if (mqtt_buffer_free() < (length + MQTT_LF_LENGTH(length) + 1))
     return false;
 
   // fixed header
@@ -706,7 +800,7 @@ mqtt_construct_unsubscribe_packet_P(PGM_P topic)
 bool
 mqtt_construct_zerolength_packet(uint8_t msg_type)
 {
-  if (!mqtt_buffer_free(2))
+  if (mqtt_buffer_free() < 2)
     return false;
 
   // fixed header
@@ -727,7 +821,7 @@ mqtt_construct_zerolength_packet(uint8_t msg_type)
 bool
 mqtt_construct_ack_packet(uint8_t msg_type, uint16_t msgid)
 {
-  if (!mqtt_buffer_free(4))
+  if (mqtt_buffer_free() < 4)
     return false;
 
   uint8_t header_flags = msg_type;

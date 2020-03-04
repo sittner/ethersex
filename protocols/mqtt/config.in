@@ -24,6 +24,13 @@ if [ "$MQTT_STATIC_CONF" = y ]; then
   fi
 fi
 
+	dep_bool 'Enable MQTT Homie protocol' MQTT_HOMIE_SUPPORT $MQTT_SUPPORT $MQTT_STATIC_CONF "$(not $MQTT_STATIC_CONF_SUPPLY_WILL)"
+if [ "$MQTT_HOMIE_SUPPORT" = y ]; then
+	string 'ID of the device' MQTT_HOMIE_CONF_DEV_ID
+	string 'Friendly name of the device' MQTT_HOMIE_CONF_DEV_NAME
+	string 'Supported extensions (comma separated)' MQTT_HOMIE_CONF_EXTENSIONS
+fi
+
 	comment  "Debugging Flags"
 	dep_bool 'MQTT Debug Messages' MQTT_DEBUG $DEBUG $MQTT_SUPPORT
 	dep_bool 'MQTT Parse method Debug Messages' MQTT_PARSE_DEBUG $DEBUG $MQTT_SUPPORT

@@ -24,10 +24,10 @@
 #include "tanklevel_homie.h"
 
 static const char node_id[] PROGMEM = "tanklevel";
-static const char node_name[] PROGMEM = "Tank Level";
+static const char node_name[] PROGMEM = "Tank Level Meter";
 
 static const char level_id[] PROGMEM = "level";
-static const char level_name[] PROGMEM = "Current Level";
+static const char level_name[] PROGMEM = "Tank level";
 static const char level_unit[] PROGMEM = "l";
 
 static const char trig_id[] PROGMEM = "trigger";
@@ -37,6 +37,7 @@ static bool node_init_callback(void);
 static bool level_format_callback(int8_t array_idx);
 static bool level_output_callback(int8_t array_idx);
 static void trig_input_callback(int8_t array_idx, const char *payload, uint16_t payload_length, bool retained);
+static bool trig_output_callback(int8_t array_idx);
 
 static const mqtt_homie_property_t properties[] PROGMEM =
 {
@@ -53,7 +54,8 @@ static const mqtt_homie_property_t properties[] PROGMEM =
     .name = trig_name,
     .settable = true,
     .datatype = HOMIE_DATATYPE_BOOL,
-    .input_callback = trig_input_callback
+    .input_callback = trig_input_callback,
+    .output_callback = trig_output_callback
   },
 
   { .id = NULL }
@@ -67,12 +69,12 @@ const mqtt_homie_node_t tanklevel_homie_node PROGMEM =
   .properties = properties
 };
 
-static bool init_trig;
+static bool trig_started;
 
 static bool
 node_init_callback(void)
 {
-  init_trig = true;
+  trig_started = true; // force initial reset message
   return true;
 }
 
@@ -100,9 +102,24 @@ level_output_callback(int8_t array_idx)
 
 static void trig_input_callback(int8_t array_idx, const char *payload, uint16_t payload_length, bool retained)
 {
-  if (strncmp_P(payload, mqtt_homie_bool(true), payload_length) == 0)
+  if (!trig_started && strncmp_P(payload, mqtt_homie_bool(true), payload_length) == 0)
   {
+    trig_started = true;
     tanklevel_start();
   }
+}
+
+static bool trig_output_callback(int8_t array_idx)
+{
+  if (trig_started && !tanklevel_check_busy())
+  {
+    mqtt_homie_header_prop_value(node_id, trig_id, HOMIE_ARRAY_FLAG_NOARR, false);
+    mqtt_construct_publish_packet_payload(PSTR("%S"), mqtt_homie_bool(false));
+    if (!mqtt_construct_publish_packet_fin())
+      return false;
+    trig_started = false;
+  }
+
+  return true;
 }
 

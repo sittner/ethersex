@@ -35,6 +35,7 @@ dep_bool_menu "Heating Control" HEATCTL_SUPPORT $UPTIME_SUPPORT $ONEWIRE_SUPPORT
 	if  [ "$HEATCTL_MQTT_SUPPORT" = "y" ] ; then
 		string "MQTT Topic" HEATCTL_MQTT_TOPIC "heatctl"
 	fi
+	dep_bool "MQTT Homie support" HEATCTL_HOMIE_SUPPORT $HEATCTL_SUPPORT $MQTT_HOMIE_SUPPORT
 endmenu
 
 

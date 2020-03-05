@@ -19,6 +19,10 @@
 #include "services/tanklevel/tanklevel_homie.h"
 #endif
 
+#ifdef HEATCTL_HOMIE_SUPPORT
+#include "services/heatctl/heatctl_homie.h"
+#endif
+
 typedef enum
 {
   HOMIE_DISCONNECTED,
@@ -98,6 +102,9 @@ static const mqtt_homie_node_t * const nodes[] PROGMEM =
 #endif
 #ifdef TANKLEVEL_HOMIE_SUPPORT
   &tanklevel_homie_node,
+#endif
+#ifdef HEATCTL_HOMIE_SUPPORT
+  &heatctl_homie_node,
 #endif
   NULL
 };

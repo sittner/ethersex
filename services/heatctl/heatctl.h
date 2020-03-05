@@ -20,6 +20,10 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
+#include <stdint.h>
+#include <config.h>
+#include <services/clock/clock_lib.h>
+
 #ifndef _HEATCTL_H
 #define _HEATCTL_H
 

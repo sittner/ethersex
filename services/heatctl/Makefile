@@ -10,6 +10,9 @@ $(HEATCTL_SUPPORT)_SRC += \
 $(HEATCTL_MQTT_SUPPORT)_SRC += \
 	services/heatctl/heatctl_mqtt.c \
 
+$(HEATCTL_HOMIE_SUPPORT)_SRC += \
+	services/heatctl/heatctl_homie.c \
+
 ##############################################################################
 # generic fluff
 include $(TOPDIR)/scripts/rules.mk

@@ -24,10 +24,10 @@
 #include "tanklevel_homie.h"
 
 static const char node_id[] PROGMEM = "tanklevel";
-static const char node_name[] PROGMEM = "Tank Level";
+static const char node_name[] PROGMEM = "Tank Level Meter";
 
 static const char level_id[] PROGMEM = "level";
-static const char level_name[] PROGMEM = "Current Level";
+static const char level_name[] PROGMEM = "Tank level";
 static const char level_unit[] PROGMEM = "l";
 
 static const char trig_id[] PROGMEM = "trigger";

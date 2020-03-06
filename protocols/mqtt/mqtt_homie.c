@@ -53,10 +53,10 @@ static bool header_prop_attr(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM
 
 static bool send_prop_meta_str_P(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, PGM_P value);
 static bool send_prop_meta_str_ptr(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, PGM_P const *value);
-static bool send_prop_meta_bool(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, uint8_t const *value);
+static bool send_prop_meta_settable(PGM_P node_id, PGM_P prop_id, int8_t array_idx, input_callback_t const *input_callback);
 static bool send_prop_meta_datatype(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, uint8_t const *value);
 static bool send_prop_meta_cb_fixed(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, mqtt_homie_bool_s8_callback_t const *cb, PGM_P const *fixed);
-static bool send_prop_subscribe(PGM_P node_id, PGM_P prop_id, int8_t array_idx, uint8_t const *settable);
+static bool send_prop_subscribe(PGM_P node_id, PGM_P prop_id, int8_t array_idx, input_callback_t const *input_callback);
 static bool send_prop_meta_array(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop);
 static bool send_prop_meta(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop, int8_t array_idx);
 static bool send_props_meta(const mqtt_homie_node_t *node);
@@ -362,10 +362,10 @@ send_prop_meta_str_ptr(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P att
 }
 
 static bool
-send_prop_meta_bool(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P attr, uint8_t const *value)
+send_prop_meta_settable(PGM_P node_id, PGM_P prop_id, int8_t array_idx, input_callback_t const *input_callback)
 {
-  bool b = (bool) pgm_read_byte(value);
-  return send_prop_meta_str_P(node_id, prop_id, array_idx, attr, mqtt_homie_bool(b));
+  input_callback_t cb = (input_callback_t) pgm_read_word(input_callback);
+  return send_prop_meta_str_P(node_id, prop_id, array_idx, PSTR("$settable"), mqtt_homie_bool(cb != NULL));
 }
 
 static bool
@@ -412,9 +412,10 @@ send_prop_meta_cb_fixed(PGM_P node_id, PGM_P prop_id, int8_t array_idx, PGM_P at
 }
 
 static bool
-send_prop_subscribe(PGM_P node_id, PGM_P prop_id, int8_t array_idx, uint8_t const *settable)
+send_prop_subscribe(PGM_P node_id, PGM_P prop_id, int8_t array_idx, input_callback_t const *input_callback)
 {
-  if (!pgm_read_byte(settable))
+  input_callback_t cb = (input_callback_t) pgm_read_word(input_callback);
+  if (cb == NULL)
     return true;
 
   if (array_idx >= 0)
@@ -439,7 +440,7 @@ send_prop_meta(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop,
       prop_field++;
 
     case 1:
-      if (!send_prop_meta_bool(node_id, prop_id, array_idx, PSTR("$settable"), &prop->settable))
+      if (!send_prop_meta_settable(node_id, prop_id, array_idx, &prop->input_callback))
         return false;
       prop_field++;
 
@@ -459,7 +460,7 @@ send_prop_meta(const mqtt_homie_node_t *node, const mqtt_homie_property_t *prop,
       prop_field++;
 
     case 5:
-      if (!send_prop_subscribe(node_id, prop_id, array_idx, &prop->settable))
+      if (!send_prop_subscribe(node_id, prop_id, array_idx, &prop->input_callback))
         return false;
       prop_field++;
   }

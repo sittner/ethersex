@@ -53,7 +53,6 @@ typedef struct
   mqtt_homie_s8_void_callback_t array_count_callback;
   PGM_P name;
   mqtt_homie_bool_s8_callback_t name_callback;
-  uint8_t settable;
   PGM_P unit;
   uint8_t datatype;
   PGM_P format;

@@ -52,7 +52,6 @@ static const mqtt_homie_property_t properties[] PROGMEM =
   {
     .id = trig_id,
     .name = trig_name,
-    .settable = true,
     .datatype = HOMIE_DATATYPE_BOOL,
     .input_callback = trig_input_callback,
     .output_callback = trig_output_callback
